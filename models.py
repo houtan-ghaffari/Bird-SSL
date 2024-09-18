@@ -45,8 +45,8 @@ class MaskedAutoencoderViT(nn.Module):
         self.encoder_depth = depth
         self.contextual_depth = contextual_depth
         self.blocks = nn.ModuleList([
-            Block(embed_dim, num_heads, mlp_ratio, qkv_bias=True, qk_scale=None, norm_layer=norm_layer)
-            for i in range(depth)])
+            Block(embed_dim, num_heads, mlp_ratio, qkv_bias=True, norm_layer=norm_layer)
+            for i in range(depth)]) # transformer blocks, 12 blocks = standard ViT! can be changed with depth
         self.norm = norm_layer(embed_dim)
 
         # --------------------------------------------------------------------------
@@ -67,7 +67,7 @@ class MaskedAutoencoderViT(nn.Module):
         else:
             window_size= (4,4)
             feat_size = (64,8)                
-        if self.decoder_mode == 1:
+        if self.decoder_mode == 1: #swined decoder 
             decoder_modules = []
             for index in range(16):
                 if self.no_shift:
@@ -96,9 +96,9 @@ class MaskedAutoencoderViT(nn.Module):
                 )
             self.decoder_blocks = nn.ModuleList(decoder_modules)        
         else:
-            # Transfomer
+            # Transfomer DECODER
             self.decoder_blocks = nn.ModuleList([
-                Block(decoder_embed_dim, decoder_num_heads, mlp_ratio, qkv_bias=True, qk_scale=None, norm_layer=norm_layer)
+                Block(decoder_embed_dim, decoder_num_heads, mlp_ratio, qkv_bias=True, norm_layer=norm_layer)
                 for i in range(decoder_depth)])
 
         self.decoder_norm = norm_layer(decoder_embed_dim)
@@ -223,7 +223,7 @@ class MaskedAutoencoderViT(nn.Module):
         
         # sort noise for each sample
         ids_shuffle = torch.argsort(noise, dim=1)  # ascend: small is keep, large is remove
-        ids_restore = torch.argsort(ids_shuffle, dim=1)
+        ids_restore = torch.argsort(ids_shuffle, dim=1) # restore the oriignal order
 
         # keep the first subset
         ids_keep = ids_shuffle[:, :len_keep]
@@ -236,7 +236,27 @@ class MaskedAutoencoderViT(nn.Module):
         mask = torch.gather(mask, dim=1, index=ids_restore)
 
         return x_masked, mask, ids_restore
-
+    
+    # def random_masking_simplified(self, x, mask_ratio):
+    #     """
+    #     Perform per-sample random masking.
+    #     x: [N, L, D], sequence
+    #     """
+    #     N, L, D = x.shape  # batch, length, dim
+    #     num_keep = int(L * (1 - mask_ratio))
+        
+    #     # Create a random mask
+    #     mask = torch.zeros((N, L), device=x.device)
+    #     mask[:, num_keep:] = 1
+        
+    #     # Shuffle the mask for each sample
+    #     for i in range(N):
+    #         mask[i] = mask[i][torch.randperm(L)]
+        
+    #     # Apply the mask
+    #     x_masked = x[mask == 0].reshape(N, num_keep, D)
+        
+    #     return x_masked, mask
     def random_masking_2d(self, x, mask_t_prob, mask_f_prob):
         """
         2D: Spectrogram (msking t and f under mask_t_prob and mask_f_prob)
@@ -306,7 +326,7 @@ class MaskedAutoencoderViT(nn.Module):
 
         # append cls token
         cls_token = self.cls_token + self.pos_embed[:, :1, :]
-        cls_tokens = cls_token.expand(x.shape[0], -1, -1)
+        cls_tokens = cls_token.expand(x.shape[0], -1, -1) # expands on batch
         x = torch.cat((cls_tokens, x), dim=1)
 
         # apply Transformer blocks
@@ -349,8 +369,8 @@ class MaskedAutoencoderViT(nn.Module):
 
         # append mask tokens to sequence
         mask_tokens = self.mask_token.repeat(x.shape[0], ids_restore.shape[1] + 1 - x.shape[1], 1)
-        x_ = torch.cat([x[:, 1:, :], mask_tokens], dim=1)  # no cls token
-        x_ = torch.gather(x_, dim=1, index=ids_restore.unsqueeze(-1).repeat(1, 1, x.shape[2]))  # unshuffle
+        x_ = torch.cat([x[:, 1:, :], mask_tokens], dim=1)  # no cls token concat
+        x_ = torch.gather(x_, dim=1, index=ids_restore.unsqueeze(-1).repeat(1, 1, x.shape[2]))  # unshuffle again to get original order
         x = torch.cat([x[:, :1, :], x_], dim=1)  # append cls token
 
         # add pos embed
@@ -408,21 +428,15 @@ class MaskedAutoencoderViT(nn.Module):
         emb_enc, mask, ids_restore, _ = self.forward_encoder(imgs, mask_ratio, mask_2d=self.mask_2d)
         pred, _, _ = self.forward_decoder(emb_enc, ids_restore)  # [N, L, p*p*3]
         loss_recon = self.forward_loss(imgs, pred, mask, norm_pix_loss=self.norm_pix_loss)
-        loss_contrastive = torch.FloatTensor([0.0]).cuda()
+        loss_contrastive = 0#torch.FloatTensor([0.0]).cuda() # not used
         return loss_recon, pred, mask, loss_contrastive
 #%%
 def mae_vit_base_patch16(**kwargs):
     model = MaskedAutoencoderViT(
         patch_size=16, embed_dim=768, depth=12, num_heads=12,
         decoder_embed_dim=512, decoder_num_heads=16,
-        mlp_ratio=4, norm_layer=partial(nn.LayerNorm, eps=1e-6), **kwargs)
+        mlp_ratio=4, norm_layer=partial(nn.LayerNorm, eps=1e-6), 
+        in_chans=1, **kwargs)
     return model
 
-
-#%%
-
 model = mae_vit_base_patch16()
-# %%
-import numpy as np
-
-np.float(3)
