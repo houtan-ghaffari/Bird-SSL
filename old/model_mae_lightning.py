@@ -7,6 +7,7 @@ from timm.models.swin_transformer import SwinTransformerBlock
 from functools import partial
 from util.pos_embed import get_2d_sincos_pos_embed, get_2d_sincos_pos_embed_flexible
 from util.patch_embed import PatchEmbed_new, PatchEmbed_org
+from torch.optim.lr_scheduler import CosineAnnealingLR
 
 class MAE_Encoder(nn.Module):
     def __init__(self, 
@@ -165,7 +166,8 @@ class MAE_Sound(pl.LightningModule):
                  mask_2d=False,
                  epoch=0, 
                  no_shift=False, 
-                 learning_rate=1e-4):
+                 learning_rate=1e-4,
+                 max_epochs=10):
         super().__init__()
         self.save_hyperparameters()
 
@@ -202,6 +204,7 @@ class MAE_Sound(pl.LightningModule):
         self.mask_t_prob = mask_t_prob
         self.mask_f_prob = mask_f_prob
         self.learning_rate = learning_rate
+        self.max_epochs = max_epochs # needed for scheduler
         self.norm_pix_loss = norm_pix_loss
 
         self.initialize_weights()
@@ -281,9 +284,10 @@ class MAE_Sound(pl.LightningModule):
         return loss, pred, mask
 
     def training_step(self, batch, batch_idx):
-        imgs = batch
-        loss, pred, mask = self(imgs, mask_ratio=0.75)
-        self.log('train_loss', loss)
+        audio = batch["audio"]
+        labels = batch["label"]
+        loss, pred, mask = self(audio)
+        self.log('train_loss', loss, on_step=True, on_epoch=True, prog_bar=True)
         return loss
 
     def validation_step(self, batch, batch_idx):
@@ -291,8 +295,22 @@ class MAE_Sound(pl.LightningModule):
 
     def configure_optimizers(self):
         optimizer = torch.optim.AdamW(self.parameters(), lr=self.learning_rate)
-        return optimizer
+        scheduler = CosineAnnealingLR(optimizer, T_max=self.max_epochs)
         
+        return {
+            "optimizer": optimizer,
+            "lr_scheduler": {
+                "scheduler": scheduler,
+                "interval": "step",  # Update at every step
+                "frequency": 1
+            },
+        }
+
+    def on_train_batch_start(self, batch, batch_idx, unused=0):
+        # Log the learning rate
+        lr = self.optimizers().param_groups[0]['lr']
+        self.log('learning_rate', lr, prog_bar=True)
+
 #%%
 from functools import partial
 import torch.nn as nn 

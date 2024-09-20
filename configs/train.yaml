@@ -1,0 +1,16 @@
+# @package _global_
+defaults:
+  - _self_
+  - callbacks: default
+  - data/dataset: esc50
+  - data/loaders: default
+  - data/transform: melscale
+  - hydra: workstation
+  - module/network: amae
+  - module/optimizer: adamw
+  - paths: workstation
+  - trainer: single_gpu
+  
+seed: 42
+start_time: ${now:%Y-%m-%d_%H%M%S}
+task_name: "train"

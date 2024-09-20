@@ -1,2 +1,6 @@
 /src/
 /data/
+/lightning_logs/
+/logs/
+/__pycache__/
+*.pyc

@@ -1,0 +1,8 @@
+dataset_name: "ashraq/esc50"
+dataset_dir: ${paths.dataset_dir}
+num_classes: 50
+train_split: "train"
+test_split: "test"
+train_size: 0.8
+num_workers: 4
+columns: ["audio", "target"]

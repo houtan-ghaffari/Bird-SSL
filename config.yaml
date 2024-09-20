@@ -1,0 +1,23 @@
+sampling_rate: 44100
+
+mel_params:
+  num_frequency_bins: 256
+  num_mel_filters: 128
+  min_frequency: 20
+  max_frequency: 22050
+  norm: null
+  mel_scale: "kaldi"
+  triangularize_in_mel_space: true
+
+spectrogram_params:
+  frame_length: 400
+  hop_length: 160
+  fft_length: 512
+  power: 2.0
+  center: false
+  preemphasis: 0.97
+  log_mel: "log"
+  mel_floor: 1.192092955078125e-07
+  remove_dc_offset: true
+
+batch_size: 8
