@@ -73,9 +73,11 @@ class HFDataModule(pl.LightningDataModule):
             self.train_data.set_format("numpy", columns=self.columns, output_all_columns=False)
             self.train_data = self.train_data.cast_column("audio", Audio(sampling_rate=self.sampling_rate))
             self.train_data.set_transform(self.train_transform)
+
+            self.val_data = None
         
         if stage == "test": 
-            pass
+            self.train_data = None
 
     def train_dataloader(self) -> DataLoader:
         return DataLoader(
@@ -86,10 +88,20 @@ class HFDataModule(pl.LightningDataModule):
         )
     
     def test_dataloader(self) -> DataLoader:
-        pass
+        return DataLoader(
+            self.train_data,
+            num_workers=self.test_loader_configs.num_workers,
+            batch_size=self.test_loader_configs.batch_size,
+            shuffle=self.test_loader_configs.shuffle
+        )
 
     def val_dataloader(self) -> DataLoader:
-        pass 
+        return DataLoader(
+            self.train_data,
+            num_workers=self.val_loader_configs.num_workers,
+            batch_size=self.val_loader_configs.batch_size,
+            shuffle=self.val_loader_configs.shuffle
+        )
 
     
 

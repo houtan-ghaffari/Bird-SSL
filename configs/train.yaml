@@ -6,11 +6,12 @@ defaults:
   - data/loaders: default
   - data/transform: melscale
   - hydra: workstation
-  - module/network: amae
+  - module/network: amae_vitbase_16
   - module/optimizer: adamw
+  - module/scheduler: cosine
   - paths: workstation
   - trainer: single_gpu
   
 seed: 42
 start_time: ${now:%Y-%m-%d_%H%M%S}
-task_name: "train"
+task_name: "ssl"

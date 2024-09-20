@@ -1,8 +1,9 @@
 #%%
 import os 
 import hydra
-import lightning.pytorch as pl 
+import lightning as L
 import matplotlib.pyplot as plt  # Import matplotlib for saving spectrograms
+import librosa 
 
 from omegaconf import OmegaConf, DictConfig
 import pyrootutils
@@ -11,6 +12,7 @@ from pathlib import Path
 from datamodule import HFDataModule
 from transforms import Transform
 from util.pylogger import get_pylogger
+from build import instantiate_callbacks, build_model
 
 log = get_pylogger(__name__)
 
@@ -37,7 +39,7 @@ def train(cfg: DictConfig):
     log.info(f"Output directory:  <{os.path.abspath(cfg.paths.output_dir)}>")
 
     log.info("Seed everything with cfg.")
-    pl.seed_everything(cfg.seed)
+    L.seed_everything(cfg.seed)
 
     log.info("Setup datamodule")
     datamodule = HFDataModule(
@@ -47,24 +49,27 @@ def train(cfg: DictConfig):
         sampling_rate=cfg.module.network.sampling_rate
     )
 
-    datamodule.prepare_data()
-    datamodule.setup("fit")
+    log.info("Setup logger")
+    logger = None
 
-    # Save each tensor of the first batch as a spectrogram PNG
-    batch = next(iter(datamodule.train_dataloader()))
-    for i, audio_tensor in enumerate(batch["audio"]):
-        # Convert the tensor to a numpy array and transpose it for visualization
-        audio_np = audio_tensor.squeeze().numpy()  # Remove the channel dimension
-        plt.figure(figsize=(10, 4))
-        plt.imshow(audio_np, aspect='auto', origin='lower', cmap='inferno')
-        plt.colorbar(format='%+2.0f dB')
-        plt.title(f'Spectrogram {i}')
-        plt.xlabel('Time')
-        plt.ylabel('Frequency')
-        
-        # Save the figure
-        plt.savefig(f'spectrogram_{i}.png')
-        plt.close()  # Close the figure to free memory
+    log.info("Setup callbacks")
+    callbacks = instantiate_callbacks(cfg["callbacks"])
+                                      
+    log.info("Setup trainer")
+    trainer = L.Trainer(**cfg.trainer, callbacks=callbacks, logger=logger)
+
+    log.info("Setup model")
+    model = build_model(cfg.module)
+
+    log.info("Start training")
+    trainer.fit(model=model, datamodule=datamodule)
+
+    print("halloo")
+
+
+
+    # datamodule.prepare_data()
+    # datamodule.setup("fit")
 
 if __name__ == "__main__":
     train()

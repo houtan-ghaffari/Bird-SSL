@@ -2,11 +2,15 @@ default_root_dir: ${paths.output_dir}
 min_epochs: 1
 max_epochs: 10
 
-accelerator: cpu
+accelerator: gpu
 devices: 1
-enable_checkpointing: True
+enable_checkpointing: False
 enable_model_summary: True
 enable_progress_bar: True
+
+num_sanity_val_steps: 0
+limit_val_batches: 0
+barebones: False
 
 strategy: auto
 deterministic: False

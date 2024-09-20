@@ -1,3 +1,0 @@
-model_name: "AudioMAE"
-learning_rate: 1e-4
-sampling_rate: 32_000

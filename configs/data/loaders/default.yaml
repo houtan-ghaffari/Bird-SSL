@@ -1,6 +1,6 @@
 train: 
-  num_workers: 4
-  batch_size: 8
+  num_workers: 18
+  batch_size: 24
   shuffle: true
 
 val:
