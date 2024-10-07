@@ -6,7 +6,7 @@ defaults:
   - data/loaders: default
   - data/transform: melscale
   - hydra: workstation
-  - module/network: amae_vitbase_16
+  - module/network: amae_vitbase_16_ft
   - module/optimizer: adamw
   - module/scheduler: cosine
   - paths: workstation
@@ -14,4 +14,4 @@ defaults:
   
 seed: 42
 start_time: ${now:%Y-%m-%d_%H%M%S}
-task_name: "ssl"
+task_name: "finetune"

@@ -5,10 +5,12 @@ import torch.nn as nn
 import hydra
 from timm.models.vision_transformer import Block
 from timm.models.swin_transformer import SwinTransformerBlock
+from timm.models.vision_transformer import VisionTransformer
 from functools import partial
 from util.pos_embed import get_2d_sincos_pos_embed, get_2d_sincos_pos_embed_flexible
 from util.patch_embed import PatchEmbed_new, PatchEmbed_org
 from transformers import get_cosine_schedule_with_warmup
+
 class MAE_Encoder(nn.Module):
     def __init__(self, 
                  img_size_x,
@@ -103,16 +105,45 @@ class MAE_Decoder(nn.Module):
         self.decoder_pos_embed = nn.Parameter(torch.zeros(1, num_patches + 1, decoder_embed_dim), requires_grad=pos_trainable)
         norm_layer = partial(nn.LayerNorm, eps=1e-6) # for both?
 
-        self.blocks = nn.ModuleList([
-            Block(decoder_embed_dim, decoder_num_heads, mlp_ratio, qkv_bias=True, norm_layer=norm_layer)
-            for i in range(decoder_depth)])
+        
+        if decoder_mode == "swin":
+            decoder_modules = []
+            window_size = (4,4)
+            feat_size = (64,8)
+
+            for i in range(16):
+                if (i % 2) == 0:
+                    shift_size = (0,0)
+                else:
+                    shift_size = (2,0)
+
+                decoder_modules.append(
+                    SwinTransformerBlock(
+                        dim=decoder_embed_dim,
+                        num_heads=16,
+                        feat_size=feat_size,
+                        window_size=window_size,
+                        shift_size=shift_size,
+                        mlp_ratio=mlp_ratio,
+                        drop=0.0,
+                        drop_attn=0.0,
+                        drop_path=0.0,
+                        extra_norm=False,
+                        sequential_attn=False,
+                        norm_layer=norm_layer
+                    )
+                )
+
+            self.blocks = nn.ModuleList(decoder_modules)
+
+        else:
+            self.blocks = nn.ModuleList([
+                    Block(decoder_embed_dim, decoder_num_heads, mlp_ratio, qkv_bias=True, norm_layer=norm_layer)
+                    for i in range(decoder_depth)])
         
         
         self.decoder_norm = norm_layer(decoder_embed_dim)
         self.decoder_pred = nn.Linear(decoder_embed_dim, patch_size**2 * in_chans, bias=True)
-    
-    def _swin_decoder_block(self, decoder_embed_dim, decoder_num_heads, mlp_ratio, norm_layer):
-        pass
 
     def forward(self, x, ids_restore):
         x = self.decoder_embed(x)
@@ -284,13 +315,6 @@ class AudioMAE(L.LightningModule):
                 num_warmup_steps=num_warmup_steps,
                 num_training_steps=num_training_steps
             )
-
-            # scheduler = hydra.utils.instantiate(
-            #     self.scheduler_cfg, 
-            #     optimizer=optimizer, 
-            #     num_warmup_steps=num_warmup_steps, 
-            #     num_training_steps=num_training_steps)
-            
             scheduler_dict = {
                 "scheduler": scheduler,
                 "interval": "step",  # Update at every step
@@ -307,21 +331,125 @@ class AudioMAE(L.LightningModule):
         lr = self.optimizers().param_groups[0]['lr']
         self.log('learning_rate', lr, prog_bar=True)
 
-# #%%
-# from functools import partial
-# import torch.nn as nn 
-# from timm.models.vision_transformer import PatchEmbed
 
-# target_length = 512 
-# in_chans = 1
-# img_size = (target_length, 128) # 512, 128
-# #%%
-# model = MAE_Sound(
-#     patch_size=16, embed_dim=768, depth=12, num_heads=12,
-#     decoder_embed_dim=512, decoder_num_heads=16,
-#     mlp_ratio=4, norm_layer=partial(nn.LayerNorm, eps=1e-6), 
-#     in_chans=in_chans, img_size=img_size, audio_exp=True, norm_pix_loss=True) 
+class AudioMAE_FT(L.LightningModule):
+    def __init__(self, 
+                 norm_layer,
+                 cfg_encoder,
+                 optimizer,
+                 scheduler
+    ):
+        super().__init__()
+        self.save_hyperparameters()
+
+        self.encoder = MAE_Encoder(
+            img_size_x=cfg_encoder.img_size_x,
+            img_size_y=cfg_encoder.img_size_y,
+            patch_size=cfg_encoder.patch_size,
+            in_chans=cfg_encoder.in_chans,
+            embed_dim=cfg_encoder.embed_dim,
+            depth=cfg_encoder.depth,
+            num_heads=cfg_encoder.num_heads,
+            mlp_ratio=cfg_encoder.mlp_ratio,
+            norm_layer=norm_layer,
+            pos_trainable=cfg_encoder.pos_trainable,
+            stride=None
+        )
+
+        self.optimizer_cfg = optimizer
+        self.scheduler_cfg = scheduler 
+        self.loss = torch.nn.CrossEntropyLoss()
+
+    def forward(self, audio):
+        return self.encoder(audio)
+
+    def training_step(self, batch, batch_idx):
+        audio = batch["audio"]
+        targets = batch["label"]
+        pred = self(audio)
+        loss  = self.loss(pred, targets)
+        self.log('train_loss', loss, on_step=True, on_epoch=True, prog_bar=True)
+        return loss
+
+    def validation_step(self, batch, batch_idx):
+        pass
+
+    def configure_optimizers(self):
+        optimizer = hydra.utils.instantiate(
+            self.optimizer_cfg, 
+            params=self.parameters())
+    
+        if self.scheduler_cfg: 
+            num_training_steps = self.trainer.estimated_stepping_batches
+            warmup_ratio = 0.05 # hard coded
+            num_warmup_steps = num_training_steps * warmup_ratio
+
+            scheduler = get_cosine_schedule_with_warmup(
+                optimizer=optimizer,
+                num_warmup_steps=num_warmup_steps,
+                num_training_steps=num_training_steps
+            )
+            scheduler_dict = {
+                "scheduler": scheduler,
+                "interval": "step",  # Update at every step
+                "frequency": 1
+            }
+
+            return {"optimizer": optimizer, "lr_scheduler": scheduler_dict}
+        
+        return {"optimizer": optimizer}
 
 
-# #%%
+    def on_train_batch_start(self, batch, batch_idx, unused=0):
+        # Log the learning rate
+        lr = self.optimizers().param_groups[0]['lr']
+        self.log('learning_rate', lr, prog_bar=True)
+
+
+
+class VIT(L.LightningModule):
+
+    def __init__(self, 
+                 img_size_x,
+                 img_size_y,
+                 patch_size,
+                 in_chans,
+                 embed_dim,
+                 global_pool,
+                 mask2d,
+                 norm_layer,
+                 mlp_ratio,
+                 qkv_bias,
+                 eps,
+                 num_heads,
+                 depth,
+                 num_classes):
+        
+        super().__init__()
+        self.save_hyperparameters()
+
+        norm_layer = partial(nn.LayerNorm, eps=eps)
+
+        if global_pool:        
+            self.fc_norm = norm_layer(embed_dim)
+
+
+        self.vit = VisionTransformer(
+            img_size=(img_size_x, img_size_y),
+            patch_size=patch_size,
+            in_chans=in_chans,
+            num_classes=num_classes,
+            global_pool=global_pool,
+            embed_dim=embed_dim,
+            num_heads=num_heads,
+            depth=depth,
+            norm_layer=norm_layer,
+            mask2d=mask2d,
+            mlp_ratio=mlp_ratio,
+            qkv_bias=qkv_bias,
+            eps=eps
+            
+        )
+    def forward(self, x): 
+        
 

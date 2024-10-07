@@ -1,7 +1,5 @@
-
-name: AudioMAE
+name: AudioMAE_FT
 norm_layer: nn.LayerNorm
-norm_pix_loss: True
 sampling_rate: 32_000
 encoder:
     img_size_x: ${data.transform.target_length}
@@ -13,13 +11,3 @@ encoder:
     num_heads: 12
     pos_trainable: False
     mlp_ratio: 4
-decoder:
-    decoder_mode: "swin"
-    embed_dim: 512
-    depth: 8
-    num_heads: 16
-    mlp_ratio: 4
-    pos_trainable: False 
-    mode: 0
-    patch_size: 16
-

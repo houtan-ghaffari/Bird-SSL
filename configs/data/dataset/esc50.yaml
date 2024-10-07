@@ -6,3 +6,4 @@ test_split: "test"
 train_size: 0.8
 num_workers: 4
 columns: ["audio", "target"]
+target_length: 512 #dopplung in melscale! change!

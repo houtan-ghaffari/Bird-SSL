@@ -1,6 +1,6 @@
 import hydra
 from omegaconf import DictConfig, OmegaConf
-from models import AudioMAE
+from models import AudioMAE, AudioMAE_FT
 from util import pylogger
 import lightning as L
 log = pylogger.get_pylogger(__name__)
@@ -26,6 +26,13 @@ def build_model(cfg_module: DictConfig):
             norm_pix_loss=cfg_module.network.norm_pix_loss,
             cfg_encoder=cfg_module.network.encoder,
             cfg_decoder=cfg_module.network.decoder,
+            optimizer=cfg_module.optimizer,
+            scheduler=cfg_module.scheduler
+        )
+    if cfg_module.network.name == "AudioMAE_FT":
+        module = AudioMAE_FT(
+            norm_layer=cfg_module.network.norm_layer,
+            cfg_encoder=cfg_module.network.encoder,
             optimizer=cfg_module.optimizer,
             scheduler=cfg_module.scheduler
         )
