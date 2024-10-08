@@ -3,6 +3,7 @@ import lightning as L
 import torch
 import torch.nn as nn
 import hydra
+import torchmetrics
 from timm.models.vision_transformer import Block
 from timm.models.swin_transformer import SwinTransformerBlock
 from timm.models.vision_transformer import VisionTransformer
@@ -358,7 +359,6 @@ class AudioMAE_FT(L.LightningModule):
 
         self.optimizer_cfg = optimizer
         self.scheduler_cfg = scheduler 
-        self.loss = torch.nn.CrossEntropyLoss()
 
     def forward(self, audio):
         return self.encoder(audio)
@@ -406,8 +406,7 @@ class AudioMAE_FT(L.LightningModule):
         self.log('learning_rate', lr, prog_bar=True)
 
 
-
-class VIT(L.LightningModule):
+class VIT(L.LightningModule, VisionTransformer):
 
     def __init__(self, 
                  img_size_x,
@@ -423,33 +422,118 @@ class VIT(L.LightningModule):
                  eps,
                  num_heads,
                  depth,
-                 num_classes):
+                 num_classes,
+                 optimizer,
+                 scheduler,
+                 loss):
         
-        super().__init__()
+        L.LightningModule.__init__(self)
+        
+        VisionTransformer.__init__(
+            self,
+            img_size = (img_size_x, img_size_y),
+            patch_size = patch_size,
+            in_chans = in_chans,
+            embed_dim = embed_dim,
+            depth = depth,
+            num_heads = num_heads,
+            mlp_ratio = mlp_ratio,
+            qkv_bias = qkv_bias,
+            norm_layer = partial(nn.LayerNorm, eps=eps),
+            num_classes = num_classes
+        )
         self.save_hyperparameters()
+        self.img_size = (img_size_x, img_size_y)
+        self.global_pool = global_pool
 
         norm_layer = partial(nn.LayerNorm, eps=eps)
+        self.fc_norm = norm_layer(embed_dim)
+        self.mask_2d = mask2d
 
-        if global_pool:        
-            self.fc_norm = norm_layer(embed_dim)
+        self.num_heads = num_heads
+        self.depth = depth
+        self.mlp_ratio = mlp_ratio
+        self.num_classes = num_classes 
+        self.qkv_bias = qkv_bias 
+
+        self.loss = hydra.utils.instantiate(loss)
+        self.optimizer = None
+        self.optimizer_cfg = optimizer
+        self.scheduler_cfg = scheduler
+
+        self.accuracy = torchmetrics.Accuracy("multiclass", num_classes=50) # hardcoded!!
+
+    def forward_features(self, x):
+        B = x.shape[0]
+        x = self.patch_embed(x) # batch, patch, embed
+        x = x + self.pos_embed[:, :256, :] # strange
+        cls_token = self.cls_token + self.pos_embed[:, :1, :]
+        cls_tokens = cls_token.expand(B, -1, -1)  # stole cls_tokens impl from Phil Wang, thanks
+        x = torch.cat((cls_tokens, x), dim=1)
+        x = self.pos_drop(x)        
+
+        for blk in self.blocks:
+            x = blk(x)
+
+        if self.global_pool:
+            x = x[:, 1:, :].mean(dim=1)  # global pool without cls token
+            outcome = self.fc_norm(x)
+        else:
+            x = self.norm(x)
+            outcome = x[:, 0]
+
+        return outcome
+
+    def forward(self, x, v=None, mask_t_prob=0.0, mask_f_prob=0.0):
+        x = self.forward_features(x)
+        pred = self.head(x)
+        return pred 
 
 
-        self.vit = VisionTransformer(
-            img_size=(img_size_x, img_size_y),
-            patch_size=patch_size,
-            in_chans=in_chans,
-            num_classes=num_classes,
-            global_pool=global_pool,
-            embed_dim=embed_dim,
-            num_heads=num_heads,
-            depth=depth,
-            norm_layer=norm_layer,
-            mask2d=mask2d,
-            mlp_ratio=mlp_ratio,
-            qkv_bias=qkv_bias,
-            eps=eps
-            
-        )
-    def forward(self, x): 
+    def training_step(self, batch, batch_idx):
+        audio = batch["audio"]
+        targets = batch["label"]
+        pred = self(audio)
+        targets = targets.long()
+        loss  = self.loss(pred, targets)
+        self.log('train_loss', loss, on_step=True, on_epoch=True, prog_bar=True)
+        return loss
+
+    def validation_step(self, batch, batch_idx):
+        audio = batch["audio"]
+        targets = batch["label"]
+        pred = self(audio)
+        targets = targets.long()
+
+        loss = self.loss(pred, targets)
+        accuracy = self.accuracy(pred, targets)
+        self.log('val_acc', accuracy, on_step=False, on_epoch=True, prog_bar=True)
+        self.log('val_loss', loss, on_step=False, on_epoch=True, prog_bar=True)
+
+    def configure_optimizers(self):
+        self.optimizer = hydra.utils.instantiate(
+            self.optimizer_cfg, 
+            params=self.parameters())
+    
+        if self.scheduler_cfg: 
+            num_training_steps = self.trainer.estimated_stepping_batches
+            warmup_ratio = 0.05 # hard coded
+            num_warmup_steps = num_training_steps * warmup_ratio
+
+            scheduler = get_cosine_schedule_with_warmup(
+                optimizer=self.optimizer,
+                num_warmup_steps=num_warmup_steps,
+                num_training_steps=num_training_steps
+            )
+            scheduler_dict = {
+                "scheduler": scheduler,
+                "interval": "step",  # Update at every step
+                "frequency": 1,
+                "name": "lr_cosine"
+            }
+
+            return {"optimizer": self.optimizer, "lr_scheduler": scheduler_dict}
         
+        return {"optimizer": self.optimizer}      
+
 

@@ -1,6 +1,6 @@
 import hydra
 from omegaconf import DictConfig, OmegaConf
-from models import AudioMAE, AudioMAE_FT
+from models import AudioMAE, VIT
 from util import pylogger
 import lightning as L
 log = pylogger.get_pylogger(__name__)
@@ -29,12 +29,25 @@ def build_model(cfg_module: DictConfig):
             optimizer=cfg_module.optimizer,
             scheduler=cfg_module.scheduler
         )
-    if cfg_module.network.name == "AudioMAE_FT":
-        module = AudioMAE_FT(
+    elif cfg_module.network.name == "VIT":
+        module = VIT(
+            img_size_x=cfg_module.network.img_size_x,
+            img_size_y=cfg_module.network.img_size_y,
+            patch_size=cfg_module.network.patch_size,
+            in_chans=cfg_module.network.in_chans,
+            embed_dim=cfg_module.network.embed_dim,
+            global_pool=cfg_module.network.global_pool,
+            mask2d=cfg_module.network.mask2d,
             norm_layer=cfg_module.network.norm_layer,
-            cfg_encoder=cfg_module.network.encoder,
+            mlp_ratio=cfg_module.network.mlp_ratio,
+            qkv_bias=cfg_module.network.qkv_bias,
+            eps=cfg_module.network.eps,
+            num_heads=cfg_module.network.num_heads,
+            depth=cfg_module.network.depth,
+            num_classes=cfg_module.network.num_classes,
             optimizer=cfg_module.optimizer,
-            scheduler=cfg_module.scheduler
+            scheduler=cfg_module.scheduler,
+            loss=cfg_module.loss
         )
 
     else:

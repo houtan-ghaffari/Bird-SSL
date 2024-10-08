@@ -1,0 +1,22 @@
+# @package _global_
+defaults:
+  - override /callbacks: default
+  - override /data/dataset: esc50
+  - override /data/loaders: finetune_esc50
+  - override /data/transform: melscale
+  - override /logger: mlflow
+  - override /module/network: vit_base_16
+  - override /module/optimizer: adamw
+  - override /module/scheduler: cosine
+  - override /module/loss: cross_entropy
+  - override /paths: workstation
+  - override /trainer: single_gpu
+
+seed: 42
+start_time: ${now:%Y-%m-%d_%H%M%S}
+task_name: "finetune_esc50"
+
+trainer: 
+  max_epochs: 5
+
+

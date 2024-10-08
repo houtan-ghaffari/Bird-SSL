@@ -27,7 +27,7 @@ class HFDataModule(pl.LightningDataModule):
         self.dataset_name = dataset_configs.dataset_name
         self.data_dir = dataset_configs.dataset_dir
         self.num_classes = dataset_configs.num_classes
-        self.train_size = dataset_configs.train_size
+        self.test_size = dataset_configs.test_size
         self.train_split = dataset_configs.train_split
         self.test_spit = dataset_configs.test_split
         self.num_workers = dataset_configs.num_workers
@@ -38,7 +38,9 @@ class HFDataModule(pl.LightningDataModule):
             mel_params=transform_configs.mel_params,
             spectrogram_params=transform_configs.spectrogram_params,
             window_params=transform_configs.window_params,
-            target_length=transform_configs.target_length
+            target_length=transform_configs.target_length,
+            mean=dataset_configs.mean,
+            std=dataset_configs.std
         )
 
         self.train_loader_configs = loader_configs.train
@@ -69,12 +71,27 @@ class HFDataModule(pl.LightningDataModule):
                 self.dataset_name, split=self.train_split, cache_dir=self.data_dir
             )
 
-            self.train_data = dataset 
+            if self.test_size:
+                split = dataset.train_test_split(
+                    self.test_size,
+                    shuffle=True,
+                    seed=42
+                )
+                self.train_data = split["train"]
+                self.val_data = split["test"]
+
+            else: 
+                self.train_data = dataset
+                self.val_data = None
+
             self.train_data.set_format("numpy", columns=self.columns, output_all_columns=False)
-            self.train_data = self.train_data.cast_column("audio", Audio(sampling_rate=self.sampling_rate))
+            self.train_data = self.train_data.cast_column("audio", Audio(sampling_rate=self.sampling_rate, mono=True,decode=True))
             self.train_data.set_transform(self.train_transform)
 
-            self.val_data = None
+            if self.val_data:
+                self.val_data.set_format("numpy", columns=self.columns, output_all_columns=False)
+                self.val_data = self.val_data.cast_column("audio", Audio(sampling_rate=self.sampling_rate, mono=True, decode=True))
+                self.val_data.set_transform(self.train_transform)
         
         if stage == "test": 
             self.train_data = None

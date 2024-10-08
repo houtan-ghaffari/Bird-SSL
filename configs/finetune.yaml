@@ -5,13 +5,17 @@ defaults:
   - data/dataset: esc50
   - data/loaders: default
   - data/transform: melscale
+  - logger: mlflow
   - hydra: workstation
-  - module/network: amae_vitbase_16_ft
+  - module/network: vit_base_16
   - module/optimizer: adamw
   - module/scheduler: cosine
+  - module/loss: label_smoothing_cross_entropy
   - paths: workstation
   - trainer: single_gpu
+  - experiment: null
   
 seed: 42
 start_time: ${now:%Y-%m-%d_%H%M%S}
 task_name: "finetune"
+ 

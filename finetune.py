@@ -42,7 +42,7 @@ def finetune(cfg: DictConfig):
     )
 
     log.info("Setup logger")
-    logger = None
+    logger = hydra.utils.instantiate(cfg.logger)
 
     log.info("Setup callbacks")
     callbacks = instantiate_callbacks(cfg["callbacks"])
@@ -55,16 +55,16 @@ def finetune(cfg: DictConfig):
 
     img_size = (cfg.data.dataset.target_length, 128)
     in_chans = 1
-    model.encoder.patch_embed = PatchEmbed(img_size, 16, in_chans, 768)
-    num_patches = model.encoder.patch_embed.num_patches
+    model.patch_embed = PatchEmbed(img_size, 16, in_chans, 768)
+    num_patches = model.patch_embed.num_patches
     num_patches = 512 #audioset
-    model.encoder.pos_embed = nn.Parameter(torch.zeros(1, num_patches + 1, 768), requires_grad=False)
-
+    model.pos_embed = nn.Parameter(torch.zeros(1, num_patches + 1, 768), requires_grad=False)
+    
     state_dict = model.state_dict()
 
     checkpoint = torch.load(os.path.join(cfg.paths.root_dir,"weights/amae_as2m_pretrained.pth"))
     pretrained_state_dict = checkpoint["model"]
-    pretrained_state_dict = map_amae_checkpoint(pretrained_state_dict)
+    #pretrained_state_dict = map_amae_checkpoint(pretrained_state_dict)
 
     for k in ['head.weight', 'head.bias']:
         if k in pretrained_state_dict and pretrained_state_dict[k].shape != state_dict[k].shape:
@@ -76,19 +76,11 @@ def finetune(cfg: DictConfig):
             print(f"Removing key {k} from pretrained checkpoint")
             del pretrained_state_dict[k]
 
+    model.load_state_dict(pretrained_state_dict, strict=False)
 
-
-
-    # 1, 513, 512 from checkpoint, esc_model: 1,257,512 (5seconds!)
-  #  interpolate_pos_embed(model, pretrained_state_dict)
+    log.info("Start training")
+    trainer.fit(model=model, datamodule=datamodule)
     
-    #model.load_state_dict(checkpoint_model) 
-
-    info = model.load_state_dict(pretrained_state_dict, strict=False)
-    print("hallo")
-    
-
-
 
 
 if __name__ == "__main__":
