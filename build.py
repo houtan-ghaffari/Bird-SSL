@@ -44,6 +44,8 @@ def build_model(cfg_module: DictConfig):
             eps=cfg_module.network.eps,
             num_heads=cfg_module.network.num_heads,
             depth=cfg_module.network.depth,
+            pretrained_weights_path=cfg_module.network.pretrained_weights_path,
+            target_length=cfg_module.network.target_length,
             num_classes=cfg_module.network.num_classes,
             optimizer=cfg_module.optimizer,
             scheduler=cfg_module.scheduler,

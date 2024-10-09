@@ -15,3 +15,5 @@ num_heads: 12
 depth: 12
 num_classes: ${data.dataset.num_classes} 
 pos_trainable: False
+pretrained_weights_path: ${paths.root_dir}/weights/amae_as2m_pretrained.pth
+target_length: ${data.dataset.target_length}

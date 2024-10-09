@@ -4,6 +4,7 @@ import torch
 import torch.nn as nn
 import hydra
 import torchmetrics
+from timm.models.vision_transformer import PatchEmbed
 from timm.models.vision_transformer import Block
 from timm.models.swin_transformer import SwinTransformerBlock
 from timm.models.vision_transformer import VisionTransformer
@@ -11,7 +12,6 @@ from functools import partial
 from util.pos_embed import get_2d_sincos_pos_embed, get_2d_sincos_pos_embed_flexible
 from util.patch_embed import PatchEmbed_new, PatchEmbed_org
 from transformers import get_cosine_schedule_with_warmup
-
 class MAE_Encoder(nn.Module):
     def __init__(self, 
                  img_size_x,
@@ -425,6 +425,8 @@ class VIT(L.LightningModule, VisionTransformer):
                  num_classes,
                  optimizer,
                  scheduler,
+                 pretrained_weights_path, 
+                 target_length,
                  loss):
         
         L.LightningModule.__init__(self)
@@ -461,12 +463,15 @@ class VIT(L.LightningModule, VisionTransformer):
         self.optimizer_cfg = optimizer
         self.scheduler_cfg = scheduler
 
+        self.pretrained_weights_path = pretrained_weights_path
+        self.target_length = target_length
+
         self.accuracy = torchmetrics.Accuracy("multiclass", num_classes=50) # hardcoded!!
 
     def forward_features(self, x):
         B = x.shape[0]
         x = self.patch_embed(x) # batch, patch, embed
-        x = x + self.pos_embed[:, :256, :] # strange
+        x = x + self.pos_embed[:, 1:, :] # strange
         cls_token = self.cls_token + self.pos_embed[:, :1, :]
         cls_tokens = cls_token.expand(B, -1, -1)  # stole cls_tokens impl from Phil Wang, thanks
         x = torch.cat((cls_tokens, x), dim=1)
@@ -535,5 +540,27 @@ class VIT(L.LightningModule, VisionTransformer):
             return {"optimizer": self.optimizer, "lr_scheduler": scheduler_dict}
         
         return {"optimizer": self.optimizer}      
+    
+    def load_pretrained_weights(self, pretrained_weights_path): 
+        img_size = (self.target_length, 128)
+        num_patches = 512 # audioset
+
+        self.patch_embed = PatchEmbed(img_size, 16, 1, 768)
+        self.pos_embed = nn.Parameter(torch.zeros(1, num_patches + 1, 768), requires_grad=False) #to load pretrained pos embed
+        
+        pretrained_state_dict = torch.load(pretrained_weights_path, map_location="cpu")["model"]
+
+        for k in ['head.weight', 'head.bias']:
+            if k in pretrained_state_dict and pretrained_state_dict[k].shape != self.state_dict[k].shape:
+                print(f"Removing key {k} from pretrained checkpoint")
+                del pretrained_state_dict[k]
+        
+        self.load_state_dict(pretrained_state_dict, strict=False)
+
+        patch_hw = (img_size[1] // 16, img_size[0] // 16) # 16=patchsize
+        pos_embed = get_2d_sincos_pos_embed_flexible(self.pos_embed.size(-1), patch_hw, cls_token=True) # not trained, overwrite from sincos
+        self.pos_embed.data = torch.from_numpy(pos_embed).float().unsqueeze(0) 
+
+
 
 

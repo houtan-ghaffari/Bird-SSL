@@ -16,7 +16,5 @@ seed: 42
 start_time: ${now:%Y-%m-%d_%H%M%S}
 task_name: "finetune_esc50"
 
-trainer: 
-  max_epochs: 5
 
 
