@@ -2,7 +2,7 @@
 defaults:
   - override /callbacks: default
   - override /data/dataset: esc50
-  - override /data/loaders: finetune_esc50
+  - override /data/loaders: esc50
   - override /data/transform: melscale
   - override /logger: mlflow
   - override /module/network: vit_base_16
@@ -16,5 +16,14 @@ seed: 42
 start_time: ${now:%Y-%m-%d_%H%M%S}
 task_name: "finetune_esc50"
 
+data:
+  loaders:
+    train: 
+      num_workers: 8
+      batch_size: 64
+      shuffle: true
+
+trainer:
+  max_epochs: 5
 
 

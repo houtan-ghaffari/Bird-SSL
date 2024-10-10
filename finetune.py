@@ -1,4 +1,3 @@
-#%%
 import os 
 import hydra 
 import torch
@@ -11,11 +10,6 @@ from pathlib import Path
 from datamodule import HFDataModule
 from util.pylogger import get_pylogger
 from build import instantiate_callbacks, build_model
-from util.state_mapping import map_amae_checkpoint
-from timm.models.vision_transformer import PatchEmbed
-import torch.nn as nn
-
-from util.pos_embed import get_2d_sincos_pos_embed_flexible
 
 log = get_pylogger(__name__)
 
@@ -34,9 +28,9 @@ _HYDRA_PARAMS = {
 
 @hydra.main(**_HYDRA_PARAMS)
 def finetune(cfg: DictConfig):
-    log.info("Seed everything with cfg.")
+    log.info(f"Seed everything with {cfg.seed}")
     L.seed_everything(cfg.seed)
-
+    
     datamodule = HFDataModule(
         dataset_configs=cfg.data.dataset,
         loader_configs=cfg.data.loaders,
@@ -63,7 +57,10 @@ def finetune(cfg: DictConfig):
         model.load_pretrained_weights(pretrained_weights_path)
 
     log.info("Start training")
-    trainer.fit(model=model, datamodule=datamodule)
+    #trainer.fit(model=model, datamodule=datamodule)
+
+    log.info("Start testing")
+    trainer.test(model=model, datamodule=datamodule)
     
 
 if __name__ == "__main__":

@@ -2,15 +2,16 @@
 defaults:
   - _self_
   - callbacks: default
-  - data/dataset: esc50
-  - data/loaders: default
+  - data/dataset: audioset_balanced
+  - data/loaders: esc50
   - data/transform: melscale
   - logger: mlflow
   - hydra: workstation
   - module/network: vit_base_16
   - module/optimizer: adamw
   - module/scheduler: cosine
-  - module/loss: label_smoothing_cross_entropy
+  - module/loss: binary_cross_entropy
+  - module/metric: map
   - paths: workstation
   - trainer: single_gpu
   - experiment: null

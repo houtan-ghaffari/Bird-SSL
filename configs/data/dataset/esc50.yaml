@@ -1,6 +1,9 @@
-dataset_name: "ashraq/esc50"
+hf_path: ashraq/esc50
+hf_name: null
 dataset_dir: ${paths.dataset_dir}
+name: esc50
 num_classes: 50
+clip_duration: 5.0
 train_split: "train"
 test_split: "test"
 test_size: 0.2

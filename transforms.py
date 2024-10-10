@@ -22,7 +22,9 @@ class Transform:
                  window_params: DictConfig,             
                  target_length: int,
                  mean: float,
-                 std: float
+                 std: float,
+                 columns: List[str],
+                 clip_duration: float
         ):
         self.sampling_rate = mel_params.sampling_rate  
         self.target_length = target_length 
@@ -30,7 +32,8 @@ class Transform:
         self.std = std
         self.spectrogram_params = spectrogram_params  
         self.mel_filter_params = mel_params    
-
+        self.columns = columns
+        self.clip_duration = clip_duration
         self.mel_filters = self._init_mel_filters()
         self.window = window_function(
             window_length=self.spectrogram_params.frame_length, 
@@ -95,7 +98,7 @@ class Transform:
     def __call__(self, batch):
 
         waveform_batch = [audio["array"] for audio in batch["audio"]]
-        max_length = int(int(self.sampling_rate) * 5)
+        max_length = int(int(self.sampling_rate) * self.clip_duration)
         waveform_batch = self.feature_extractor(
             waveform_batch,
             padding="max_length",
@@ -133,7 +136,7 @@ class Transform:
 
         return{
             "audio":fbank_features.unsqueeze(1),
-            "label":torch.Tensor(batch["target"]),
+            "label":torch.Tensor(batch[self.columns[1]]),
         }
 
 

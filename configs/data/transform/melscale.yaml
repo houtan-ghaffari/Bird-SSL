@@ -23,5 +23,5 @@ window_params:
   type: hann
   periodic: False
 
-target_length: 512
+target_length: 1024
 

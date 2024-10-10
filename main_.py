@@ -308,3 +308,117 @@ def main(cfg: DictConfig):
 
 if __name__ == "__main__":
     main()
+
+
+#%%
+
+from datasets import load_dataset 
+
+dataset = load_dataset("agkphysics/AudioSet", cache_dir="/home/lrauch/projects/birdMAE/data/agkphysics/AudioSet")
+
+#%%
+
+dataset["test"][0]
+#%%
+
+dataset
+
+#%%
+
+from datasets import load_dataset , Audio
+
+
+dataset = load_dataset("agkphysics/AudioSet", cache_dir="/home/lrauch/projects/birdMAE/data/audioset_balanced")
+
+
+#%%
+
+train_data = dataset["train"]
+train_data.set_format("numpy", columns=["audio","human_labels"], output_all_columns=False)
+train_data = train_data.cast_column("audio", Audio(sampling_rate=32_000, mono=True, decode=True))
+
+#%%
+from tqdm import tqdm
+
+#for row in tqdm(train_data.select(range(10))): 
+for row in tqdm(train_data): 
+    try:
+        row["audio"]["array"][0]
+    except:
+        print(f"error: {row}")
+        break
+#%%
+
+train_data[15759]["audio"]["array"]
+
+#%%
+
+train_data[15759]["human_labels"]
+
+# %%
+
+row_to_remove = 15_759  # Example: remove the 6th row (index 5)
+
+# Step 3: Create a list of all indices except the one to remove
+all_indices = list(range(len(train_data)))
+indices_to_keep = [i for i in all_indices if i != row_to_remove]
+
+
+rows_to_remove= 17_532
+
+#%%
+
+indices_to_keep = list(range(len(train_data))[17_532+1:])
+# Step 4: Use select to keep only the rows you want
+new_dataset = train_data.select(indices_to_keep)
+
+#%%
+
+new_dataset
+
+#%%
+
+for row in tqdm(new_dataset): 
+    try:
+        row["audio"]["array"][0]
+    except:
+        print(f"error: {row}")
+        break
+#%%
+
+train_data[17532]["audio"]["array"]
+
+#%%
+
+from datasets import load_dataset , Audio
+
+dataset = load_dataset("agkphysics/AudioSet", cache_dir="/home/lrauch/projects/birdMAE/data/audioset_balanced")
+
+test_data = dataset["test"]
+test_data.set_format("numpy", columns=["audio","human_labels"], output_all_columns=False)
+test_data = test_data.cast_column("audio", Audio(sampling_rate=32_000, mono=True, decode=True))
+
+#%%
+from tqdm import tqdm
+
+#for row in tqdm(train_data.select(range(10))): 
+for row in tqdm(test_data): 
+    try:
+        row["audio"]["array"][0]
+    except:
+        print(f"error: {row}")
+        break
+
+#%%
+test_ = 6182
+
+indices_to_keep = list(range(len(test_data))[6182+1:])
+# Step 4: Use select to keep only the rows you want
+new_dataset = test_data.select(indices_to_keep)
+
+for row in tqdm(new_dataset): 
+    try:
+        row["audio"]["array"][0]
+    except:
+        print(f"error: {row}")
+        break

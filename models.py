@@ -12,6 +12,7 @@ from functools import partial
 from util.pos_embed import get_2d_sincos_pos_embed, get_2d_sincos_pos_embed_flexible
 from util.patch_embed import PatchEmbed_new, PatchEmbed_org
 from transformers import get_cosine_schedule_with_warmup
+
 class MAE_Encoder(nn.Module):
     def __init__(self, 
                  img_size_x,
@@ -427,7 +428,8 @@ class VIT(L.LightningModule, VisionTransformer):
                  scheduler,
                  pretrained_weights_path, 
                  target_length,
-                 loss):
+                 loss,
+                 metric):
         
         L.LightningModule.__init__(self)
         
@@ -466,7 +468,10 @@ class VIT(L.LightningModule, VisionTransformer):
         self.pretrained_weights_path = pretrained_weights_path
         self.target_length = target_length
 
-        self.accuracy = torchmetrics.Accuracy("multiclass", num_classes=50) # hardcoded!!
+        metric = hydra.utils.instantiate(metric)
+        self.train_metric = metric.clone()
+        self.val_metric = metric.clone()
+        self.test_metric = metric.clone()
 
     def forward_features(self, x):
         B = x.shape[0]
@@ -500,7 +505,10 @@ class VIT(L.LightningModule, VisionTransformer):
         targets = batch["label"]
         pred = self(audio)
         targets = targets.long()
-        loss  = self.loss(pred, targets)
+        try:
+            loss  = self.loss(pred, targets)
+        except:
+            loss = self.loss(pred, targets.float())
         self.log('train_loss', loss, on_step=True, on_epoch=True, prog_bar=True)
         return loss
 
@@ -509,10 +517,26 @@ class VIT(L.LightningModule, VisionTransformer):
         targets = batch["label"]
         pred = self(audio)
         targets = targets.long()
+        try:
+            loss  = self.loss(pred, targets)
+        except:
+            loss = self.loss(pred, targets.float())
 
-        loss = self.loss(pred, targets)
-        accuracy = self.accuracy(pred, targets)
-        self.log('val_acc', accuracy, on_step=False, on_epoch=True, prog_bar=True)
+        metric = self.val_metric(pred, targets)
+        self.log(f'val_{self.val_metric.__class__.__name__}', metric, on_step=False, on_epoch=True, prog_bar=True)
+        self.log('val_loss', loss, on_step=False, on_epoch=True, prog_bar=True)
+    
+    def test_step(self, batch, batch_idx):
+        audio = batch["audio"]
+        targets = batch["label"]
+        pred = self(audio)
+        targets = targets.long()
+        try:
+            loss  = self.loss(pred, targets)
+        except:
+            loss = self.loss(pred, targets.float())
+        metric = self.test_metric(pred, targets)
+        self.log('test_{self.metric.__class__.__name__}', metric, on_step=False, on_epoch=True, prog_bar=True)
         self.log('val_loss', loss, on_step=False, on_epoch=True, prog_bar=True)
 
     def configure_optimizers(self):
