@@ -9,12 +9,18 @@ defaults:
   - override /module/optimizer: adamw
   - override /module/scheduler: cosine
   - override /module/loss: cross_entropy
+  - override /module/metric: accuracy
   - override /paths: workstation
   - override /trainer: single_gpu
 
 seed: 42
 start_time: ${now:%Y-%m-%d_%H%M%S}
 task_name: "finetune_esc50"
+
+train: true
+test: false
+
+limit_val_batches: 0.0
 
 data:
   loaders:
@@ -25,5 +31,6 @@ data:
 
 trainer:
   max_epochs: 5
+
 
 

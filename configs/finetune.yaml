@@ -3,7 +3,7 @@ defaults:
   - _self_
   - callbacks: default
   - data/dataset: audioset_balanced
-  - data/loaders: esc50
+  - data/loaders: audioset_balanced
   - data/transform: melscale
   - logger: mlflow
   - hydra: workstation
@@ -17,6 +17,10 @@ defaults:
   - experiment: null
   
 seed: 42
+
 start_time: ${now:%Y-%m-%d_%H%M%S}
 task_name: "finetune"
+
+train: true
+test: true
  

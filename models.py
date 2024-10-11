@@ -536,8 +536,8 @@ class VIT(L.LightningModule, VisionTransformer):
         except:
             loss = self.loss(pred, targets.float())
         metric = self.test_metric(pred, targets)
-        self.log('test_{self.metric.__class__.__name__}', metric, on_step=False, on_epoch=True, prog_bar=True)
-        self.log('val_loss', loss, on_step=False, on_epoch=True, prog_bar=True)
+        self.log(f'test_{self.test_metric.__class__.__name__}', metric, on_step=False, on_epoch=True, prog_bar=True)
+        self.log('test_loss', loss, on_step=False, on_epoch=True, prog_bar=True)
 
     def configure_optimizers(self):
         self.optimizer = hydra.utils.instantiate(

@@ -12,7 +12,7 @@ from lightning.pytorch.utilities.types import EVAL_DATALOADERS, TRAIN_DATALOADER
 
 
 from configs import Config, DataModuleConfig, ModuleConfig
-from transforms import Transform
+from transforms import TrainTransform, EvalTransform
 
 class HFDataModule(pl.LightningDataModule):
     def __init__(
@@ -36,7 +36,7 @@ class HFDataModule(pl.LightningDataModule):
         self.columns = dataset_configs.columns
         self.sampling_rate = sampling_rate
 
-        self.train_transform = Transform(
+        self.train_transform = TrainTransform(
             mel_params=transform_configs.mel_params,
             spectrogram_params=transform_configs.spectrogram_params,
             window_params=transform_configs.window_params,
@@ -45,7 +45,28 @@ class HFDataModule(pl.LightningDataModule):
             std=dataset_configs.std,
             columns = dataset_configs.columns,
             clip_duration = dataset_configs.clip_duration
-            
+        )
+
+        self.val_transform = EvalTransform(
+            mel_params=transform_configs.mel_params,
+            spectrogram_params=transform_configs.spectrogram_params,
+            window_params=transform_configs.window_params,
+            target_length=dataset_configs.target_length,
+            mean=dataset_configs.mean,
+            std=dataset_configs.std,
+            columns = dataset_configs.columns,
+            clip_duration = dataset_configs.clip_duration
+        )
+
+        self.test_transform = EvalTransform(
+            mel_params=transform_configs.mel_params,
+            spectrogram_params=transform_configs.spectrogram_params,
+            window_params=transform_configs.window_params,
+            target_length=dataset_configs.target_length,
+            mean=dataset_configs.mean,
+            std=dataset_configs.std,
+            columns = dataset_configs.columns,
+            clip_duration = dataset_configs.clip_duration
         )
 
         self.train_loader_configs = loader_configs.train
@@ -109,12 +130,12 @@ class HFDataModule(pl.LightningDataModule):
             self.train_data.set_format("numpy", columns=self.columns, output_all_columns=False)
             self.train_data = self.train_data.cast_column("audio", Audio(sampling_rate=self.sampling_rate, mono=True, decode=True))
             self.train_data.set_transform(self.train_transform)
-            self.train_data = self.train_data.select(range(100))
+            #self.train_data = self.train_data.select(range(100))
 
             if self.val_data:
                 self.val_data.set_format("numpy", columns=self.columns, output_all_columns=False)
                 self.val_data = self.val_data.cast_column("audio", Audio(sampling_rate=self.sampling_rate, mono=True, decode=True))
-                self.val_data.set_transform(self.train_transform)
+                self.val_data.set_transform(self.val_transform)
         
         if stage == "test": 
             self.test_data = load_dataset(self.hf_path, self.hf_name, split=self.test_split, cache_dir=self.data_dir)
@@ -127,6 +148,11 @@ class HFDataModule(pl.LightningDataModule):
                 class_label = Sequence(ClassLabel(num_classes=num_classes, names=label_names))
                 self.test_data = self.test_data.cast_column("human_labels", class_label)
                 self.test_data = self.test_data.map(self._one_hot_encode, batched=True, batch_size=1000)
+
+                rows_to_remove = [6_182] #corrupted
+                all_indices = list(range(len(self.test_data)))
+                indices_to_keep = [i for i in all_indices if i not in rows_to_remove]
+                self.test_data = self.test_data.select(indices_to_keep)
 
             self.test_data.set_format("numpy", columns=self.columns, output_all_columns=False)
             self.test_data = self.test_data.cast_column("audio", Audio(sampling_rate=self.sampling_rate, mono=True, decode=True))

@@ -5,6 +5,7 @@ from omegaconf import DictConfig
 import torch 
 
 from torchaudio.compliance.kaldi import fbank
+from torchaudio.transforms import FrequencyMasking, TimeMasking
 from typing import Any, List, Optional, Union
 
 import numpy as np
@@ -12,10 +13,11 @@ from transformers import BatchFeature
 from transformers import SequenceFeatureExtractor
 from transformers.utils import logging, PaddingStrategy
 import torch 
+import random
 
 logger = logging.get_logger(__name__)
 
-class Transform:
+class BaseTransform:
     def __init__(self, 
                  mel_params: DictConfig,
                  spectrogram_params: DictConfig,
@@ -49,67 +51,26 @@ class Transform:
             return_attention_mask=False
         )    
 
-    # def cyclic_rolling_start(self, waveform):
-    #     idx = np.random.randint(0, len(waveform))
-    #     rolled_waveform = np.roll(waveform, idx)
-    #     volume_mag = np.random.beta(10,10) + 0.5
-    #     waveform = rolled_waveform * volume_mag
-    #     waveform = waveform - waveform.mean()
-    #     return waveform
-
-    def cyclic_rolling_start(self, waveforms):
-        # waveforms shape: (batch_size, waveform_length)
-        batch_size, waveform_length = waveforms.shape
-    
-        # Generate random indices for each waveform in the batch
-        idx = torch.randint(0, waveform_length, (batch_size,), device=waveforms.device)
-    
-        # Create a range tensor for each waveform
-        arange = torch.arange(waveform_length, device=waveforms.device).unsqueeze(0).expand(batch_size, -1)
-    
-        # Calculate the rolled indices
-        rolled_indices = (arange + idx.unsqueeze(1)) % waveform_length
-    
-        # Use advanced indexing to roll each waveform
-        rolled_waveforms = waveforms[torch.arange(batch_size).unsqueeze(1), rolled_indices]
-    
-        # Generate random volume magnitudes for the batch
-        volume_mag = torch.distributions.Beta(10, 10).sample((batch_size, 1)).to(waveforms.device) + 0.5
-    
-        # Apply volume adjustment
-        waveforms = rolled_waveforms * volume_mag
-        
-        return waveforms    
-
+        self.mixup = 0.5
+  
     def _init_mel_filters(self):
         mel_filters = mel_filter_bank(**self.mel_filter_params)
         return np.pad(mel_filters, ((0, 1), (0, 0)))
-    	
-    # def __call__(self, batch):
-    #     waveforms = torch.stack([torch.from_numpy(audio["array"]) for audio in batch["audio"]])
-    #     waveforms = waveforms - waveforms.mean(axis=1, keepdims=True)
-    #     waveforms = self.cyclic_rolling_start(waveforms)
-    #     fbank = [fbank(w, htk_compat=True, sample_frequency=self.sampling_rate, use_energy=False,
-    #             window_type='hanning', num_mel_bins=128, dither=0.0, frame_shift=10)
-    #         for w in waveforms]
-        
-    #     return fbank
 
-    def __call__(self, batch):
-
-        waveform_batch = [audio["array"] for audio in batch["audio"]]
+    def _process_waveforms(self, waveforms):
         max_length = int(int(self.sampling_rate) * self.clip_duration)
         waveform_batch = self.feature_extractor(
-            waveform_batch,
+            waveforms,
             padding="max_length",
             max_length=max_length,
             truncation=True,
             return_attention_mask=False
         )
         waveform_batch["input_values"] = waveform_batch["input_values"] - waveform_batch["input_values"].mean(axis=1, keepdims=True)
-        waveform_batch["input_values"] = self.cyclic_rolling_start(waveform_batch["input_values"]) 
-
-        fbank_features= [
+        return waveform_batch 
+    
+    def _compute_fbank_features(self, waveforms):
+        fbank_features = [
             fbank(
                 waveform.unsqueeze(0),
                 htk_compat=True,
@@ -120,26 +81,97 @@ class Transform:
                 dither=0.0,
                 frame_shift=10
             )
-            for waveform in waveform_batch["input_values"]
+            for waveform in waveforms
         ]
-
-        fbank_features = torch.stack(fbank_features) # 498 x 128
-
+        return torch.stack(fbank_features)
+    
+    def _pad_and_normalize(self, fbank_features):
         difference = self.target_length - fbank_features[0].shape[0]
         if self.target_length > fbank_features.shape[0]:
             m = torch.nn.ZeroPad2d((0, 0, 0, difference))
             fbank_features = m(fbank_features)
 
-        fbank_features = fbank_features.transpose(0,1).unsqueeze(0) # 1, 128, 1024 (...,freq,time)
-        fbank_features = torch.transpose(fbank_features.squeeze(), 0, 1) # time, freq
+        fbank_features = fbank_features.transpose(0,1).unsqueeze(0)
+        fbank_features = torch.transpose(fbank_features.squeeze(), 0, 1)
         fbank_features = (fbank_features - self.mean) / (self.std * 2)
+        return fbank_features
+    
+    def __call__(self, batch):
+        waveform_batch = [audio["array"] for audio in batch["audio"]]
+        waveform_batch = self._process_waveforms(waveform_batch)
+        fbank_features = self._compute_fbank_features(waveform_batch["input_values"])
+        fbank_features = self._pad_and_normalize(fbank_features)
 
-        return{
-            "audio":fbank_features.unsqueeze(1),
-            "label":torch.Tensor(batch[self.columns[1]]),
+        return {
+            "audio": fbank_features,
+            "label": torch.Tensor(batch[self.columns[1]])
         }
 
+class TrainTransform(BaseTransform):
+        # def cyclic_rolling_start(self, waveform):
+    #     idx = np.random.randint(0, len(waveform))
+    #     rolled_waveform = np.roll(waveform, idx)
+    #     volume_mag = np.random.beta(10,10) + 0.5
+    #     waveform = rolled_waveform * volume_mag
+    #     waveform = waveform - waveform.mean()
+    #     return waveform
+    
+    def cyclic_rolling_start(self, waveforms):
+        batch_size, waveform_length = waveforms.shape
+        idx = torch.randint(0, waveform_length, (batch_size,), device=waveforms.device)
+        arange = torch.arange(waveform_length, device=waveforms.device).unsqueeze(0).expand(batch_size, -1)
+        rolled_indices = (arange + idx.unsqueeze(1)) % waveform_length
+        rolled_waveforms = waveforms[torch.arange(batch_size).unsqueeze(1), rolled_indices]
+        volume_mag = torch.distributions.Beta(10, 10).sample((batch_size, 1)).to(waveforms.device) + 0.5
+        waveforms = rolled_waveforms * volume_mag
+        
+        return waveforms  
+    
+    def __call__(self, batch):
+        waveform_batch = [audio["array"] for audio in batch["audio"]]
+        waveform_batch = self._process_waveforms(waveform_batch)
+        waveform_batch["input_values"] = self.cyclic_rolling_start(waveform_batch["input_values"])
 
+        # mixup
+        waveform_batch["input_values"], batch[self.columns[1]] = self._mixup(waveform_batch, batch[self.columns[1]])
+
+        # # 
+        # freqm = FrequencyMasking(48)
+        # timem = TimeMasking(192)
+        # waveform_batch["input_values"] = freqm(waveform_batch["input_values"])
+        # waveform_batch["input_values"] = timem(waveform_batch["input_values"])
+
+        fbank_features = self._compute_fbank_features(waveform_batch["input_values"])
+        fbank_features = self._pad_and_normalize(fbank_features)
+
+        return {
+            "audio": fbank_features.unsqueeze(1),
+            "label": torch.Tensor(batch[self.columns[1]]),
+        }
+    
+    def _mixup(self, waveform_batch, labels):
+        mixed_audio = []
+        mixed_labels = []
+        batch_length = len(labels)
+        for idx in range(batch_length):
+            if random.random() < self.mixup:
+                mix_sample_idx = random.randint(0, batch_length - 1)
+                mix_lambda = np.random.beta(10, 10)
+                mix_waveform = mix_lambda * waveform_batch["input_values"][idx] + (1 - mix_lambda) * waveform_batch["input_values"][mix_sample_idx]
+
+                mix_waveform = mix_waveform - mix_waveform.mean()
+                mixed_audio.append(mix_waveform)
+                mixed_labels.append([mix_lambda * l1 + (1 - mix_lambda) * l2 for l1, l2 in zip(labels[idx], labels[mix_sample_idx])])
+            else:
+                mixed_audio.append(waveform_batch["input_values"][idx])
+                mixed_labels.append(labels[idx])
+
+        waveform_batch["input_values"] = torch.stack(mixed_audio)
+        return torch.stack(mixed_audio), mixed_labels
+
+
+class EvalTransform(BaseTransform):
+    pass
 
 class DefaultFeatureExtractor(SequenceFeatureExtractor):
     """

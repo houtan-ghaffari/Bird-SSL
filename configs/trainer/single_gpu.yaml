@@ -1,6 +1,6 @@
 default_root_dir: ${paths.output_dir}
 min_epochs: 1
-max_epochs: 2
+max_epochs: 10
 
 accelerator: gpu
 devices: 1
@@ -9,8 +9,8 @@ enable_model_summary: False
 enable_progress_bar: True
 
 num_sanity_val_steps: 0
-#limit_val_batches: 1.0
 limit_val_batches: 0
+#limit_val_batches: 0
 barebones: False
 
 strategy: auto

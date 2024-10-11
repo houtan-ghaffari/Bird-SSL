@@ -56,11 +56,13 @@ def finetune(cfg: DictConfig):
         log.info(f"Load pretrained weights from {pretrained_weights_path}")
         model.load_pretrained_weights(pretrained_weights_path)
 
-    log.info("Start training")
-    #trainer.fit(model=model, datamodule=datamodule)
+    if cfg.train: 
+        log.info("Start training")
+        trainer.fit(model=model, datamodule=datamodule)
 
-    log.info("Start testing")
-    trainer.test(model=model, datamodule=datamodule)
+    if cfg.test:
+        log.info("Start testing")
+        trainer.test(model=model, datamodule=datamodule)
     
 
 if __name__ == "__main__":

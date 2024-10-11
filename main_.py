@@ -398,6 +398,10 @@ test_data = dataset["test"]
 test_data.set_format("numpy", columns=["audio","human_labels"], output_all_columns=False)
 test_data = test_data.cast_column("audio", Audio(sampling_rate=32_000, mono=True, decode=True))
 
+
+#%%
+
+test_data[6182]["audio"]["array"]
 #%%
 from tqdm import tqdm
 
