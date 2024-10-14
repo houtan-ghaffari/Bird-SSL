@@ -3,7 +3,7 @@ defaults:
   - override /callbacks: default
   - override /data/dataset: esc50
   - override /data/loaders: esc50
-  - override /data/transform: melscale
+  - override /data/transform: melbank_esc
   - override /logger: mlflow
   - override /module/network: vit_base_16
   - override /module/optimizer: adamw
@@ -20,8 +20,6 @@ task_name: "finetune_esc50"
 train: true
 test: false
 
-limit_val_batches: 0.0
-
 data:
   loaders:
     train: 
@@ -30,7 +28,8 @@ data:
       shuffle: true
 
 trainer:
-  max_epochs: 5
+  max_epochs: 15
+  limit_val_batches: 1.0
 
 
 

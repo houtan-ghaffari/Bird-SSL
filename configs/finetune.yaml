@@ -4,7 +4,7 @@ defaults:
   - callbacks: default
   - data/dataset: audioset_balanced
   - data/loaders: audioset_balanced
-  - data/transform: melscale
+  - data/transform: melbank_as
   - logger: mlflow
   - hydra: workstation
   - module/network: vit_base_16

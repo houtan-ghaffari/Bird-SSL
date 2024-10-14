@@ -426,3 +426,226 @@ for row in tqdm(new_dataset):
     except:
         print(f"error: {row}")
         break
+#%%
+from datasets import load_dataset , Audio
+
+dataset = load_dataset("agkphysics/AudioSet", cache_dir="/home/lrauch/projects/birdMAE/data/audioset_balanced")
+
+test_data = dataset["test"]
+test_data.set_format("numpy", columns=["audio","human_labels"], output_all_columns=False)
+test_data = test_data.cast_column("audio", Audio(sampling_rate=32_000, mono=True, decode=True))
+
+#%%
+test_data
+#%%
+unique_classes = set()
+
+# Loop through the dataset
+for sample["human_labels"] in test_data:
+    # Assuming the labels are in a field called 'labels', which is a list of lists with strings
+    for label in sample['human_labels']:
+        unique_classes.update(label)  # Add all labels in the current sample to the set
+
+# Print the number of unique classes
+print(f"Number of unique classes: {len(unique_classes)}")
+
+# Optional: Print the unique classes
+print("Unique classes:", unique_classes)
+
+
+#%% 
+
+# preprocessing 
+import json 
+import os 
+import json
+from datetime import datetime
+from omegaconf import DictConfig
+from datasets import load_dataset, Audio, ClassLabel, Sequence
+from torch.utils.data import DataLoader
+import torch
+import lightning.pytorch as pl 
+from lightning.pytorch.utilities.rank_zero import rank_zero_info
+from lightning.pytorch.utilities.types import EVAL_DATALOADERS, TRAIN_DATALOADERS
+import numpy as np 
+
+from configs import Config, DataModuleConfig, ModuleConfig
+from transforms import TrainTransform, EvalTransform
+#%%
+dataset = load_dataset(
+    "agkphysics/AudioSet", split="train",cache_dir="/home/lrauch/projects/birdMAE/data/audioset_balanced"
+)
+
+#%%
+
+dataset
+
+
+#%%
+columns = ["audio", "human_labels"]
+def _one_hot_encode(batch):
+    label_list = [y for y in batch[columns[1]]]
+    
+    # Use numpy instead of torch for caching
+    class_one_hot_matrix = np.zeros((len(label_list), num_classes), dtype=np.float32)
+    
+    for class_idx, indices in enumerate(label_list):
+        class_one_hot_matrix[class_idx, indices] = 1.0
+    
+    return {columns[1]: class_one_hot_matrix}
+
+
+
+with open("/home/lrauch/projects/birdMAE/data/audioset_ontology_custom527.json", "r") as f:
+    ontology = json.load(f)
+num_classes = len(ontology)
+label_names = list(ontology.keys())
+class_label = Sequence(ClassLabel(num_classes=num_classes, names=label_names))
+dataset = dataset.cast_column("human_labels", class_label)
+dataset = dataset.map(_one_hot_encode, batched=True, batch_size=1000, load_from_cache_file=True)
+
+rows_to_remove = [15_759,17_532] #corrupted
+all_indices = list(range(len(dataset)))
+indices_to_keep = [i for i in all_indices if i not in rows_to_remove]
+dataset = dataset.select(indices_to_keep)
+
+#%%
+
+dataset["human_labels"][0]
+
+from datasets import DatasetDict
+
+dataset_dict = DatasetDict({"train": dataset})
+
+#%%
+
+dataset_dict
+
+#%%
+test_data = load_dataset(
+    "agkphysics/AudioSet", split="test",cache_dir="/home/lrauch/projects/birdMAE/data/audioset_balanced"
+)
+#%%
+
+test_data
+
+#%%
+with open("/home/lrauch/projects/birdMAE/data/audioset_ontology_custom527.json", "r") as f:
+    ontology = json.load(f)
+num_classes = len(ontology)
+label_names = list(ontology.keys())
+class_label = Sequence(ClassLabel(num_classes=num_classes, names=label_names))
+test_data = test_data.cast_column("human_labels", class_label)
+test_data = test_data.map(_one_hot_encode, batched=True, batch_size=1000)
+
+rows_to_remove = [6_182] #corrupted
+all_indices = list(range(len(test_data)))
+indices_to_keep = [i for i in all_indices if i not in rows_to_remove]
+test_data = test_data.select(indices_to_keep)
+#%%
+test_data
+#%%
+dataset_dict = DatasetDict({"train": dataset, "test": test_data})
+
+
+#%%
+
+
+dataset_dict
+
+#%%
+
+dataset_dict.save_to_disk("/home/lrauch/projects/birdMAE/data/audioset_balanced/saved_to_disk")
+
+
+
+#%%
+from datasets import load_from_disk
+load_from_disk("/home/lrauch/projects/birdMAE/data/audioset_balanced/saved_to_disk", split="train")
+
+#%%
+train_dataset = load_dataset(
+    "agkphysics/AudioSet", split="train",cache_dir="/home/lrauch/projects/birdMAE/data/audioset_balanced"
+)
+
+train_dataset.set_format("numpy", columns=["audio","human_labels"], output_all_columns=False)
+train_dataset = train_dataset.cast_column("audio", Audio(sampling_rate=32_000, mono=True, decode=True))
+
+#%%
+
+import IPython.display as ipd
+
+# Get the audio array
+audio_array = train_dataset[67]["audio"]["array"]
+
+# Get the sampling rate (assuming it's 32000 as mentioned earlier)
+sampling_rate = 32000
+
+# Play the audio
+ipd.display(ipd.Audio(audio_array, rate=sampling_rate))
+
+
+#%%
+train_dataset[100]["human_labels"]
+
+
+#%%
+from torchaudio.compliance.kaldi import fbank
+
+fbank_features = fbank(
+                torch.from_numpy(train_dataset[67]["audio"]["array"]).unsqueeze(0),
+                htk_compat=True,
+                sample_frequency=32_000,
+                use_energy=False,
+                window_type='hanning',
+                num_mel_bins=128,
+                dither=0.0,
+                frame_shift=10
+)
+
+fbank_features = fbank_features.transpose(0,1).unsqueeze(0)
+fbank_features = torch.transpose(fbank_features.squeeze(), 0, 1)
+fig, ax = plt.subplots(figsize=(12, 8))
+
+# Plot the spectrogram
+im = ax.imshow(fbank_features.T, aspect='auto', origin='lower', interpolation='nearest')
+
+# Set the title and labels
+ax.set_title('Mel Spectrogram')
+ax.set_xlabel('Time')
+ax.set_ylabel('Mel Frequency Bin')
+
+# Add a colorbar
+plt.colorbar(im, ax=ax, format='%+2.0f dB')
+
+# Show the plot
+plt.tight_layout()
+
+plt.show()
+#%%
+
+fbank_features.shape
+
+#%%
+import matplotlib.pyplot as plt
+
+# Create a figure and axis
+
+
+
+#%%
+        fbank_features = [
+            fbank(
+                waveform.unsqueeze(0),
+                htk_compat=True,
+                sample_frequency=self.sampling_rate,
+                use_energy=False,
+                window_type='hanning',
+                num_mel_bins=128,
+                dither=0.0,
+                frame_shift=10
+            )
+            for waveform in waveforms
+        ]
+        return torch.stack(fbank_features)
+# %%

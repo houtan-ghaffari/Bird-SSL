@@ -12,3 +12,4 @@ columns: ["audio", "target"]
 target_length: 512 #dopplung in melscale! change!
 mean: -6.6268077
 std: 5.358466
+save_to_disk: null

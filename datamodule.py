@@ -3,13 +3,13 @@ import os
 import json
 from datetime import datetime
 from omegaconf import DictConfig
-from datasets import load_dataset, Audio, ClassLabel, Sequence
+from datasets import load_dataset, Audio, ClassLabel, load_from_disk, Sequence
 from torch.utils.data import DataLoader
 import torch
 import lightning.pytorch as pl 
 from lightning.pytorch.utilities.rank_zero import rank_zero_info
 from lightning.pytorch.utilities.types import EVAL_DATALOADERS, TRAIN_DATALOADERS
-
+import numpy as np 
 
 from configs import Config, DataModuleConfig, ModuleConfig
 from transforms import TrainTransform, EvalTransform
@@ -35,11 +35,11 @@ class HFDataModule(pl.LightningDataModule):
         self.num_workers = dataset_configs.num_workers
         self.columns = dataset_configs.columns
         self.sampling_rate = sampling_rate
+        self.save_to_disk = dataset_configs.save_to_disk
 
         self.train_transform = TrainTransform(
-            mel_params=transform_configs.mel_params,
-            spectrogram_params=transform_configs.spectrogram_params,
-            window_params=transform_configs.window_params,
+            transform_params=transform_configs,
+            sampling_rate=sampling_rate,
             target_length=dataset_configs.target_length,
             mean=dataset_configs.mean,
             std=dataset_configs.std,
@@ -48,9 +48,8 @@ class HFDataModule(pl.LightningDataModule):
         )
 
         self.val_transform = EvalTransform(
-            mel_params=transform_configs.mel_params,
-            spectrogram_params=transform_configs.spectrogram_params,
-            window_params=transform_configs.window_params,
+            transform_params=transform_configs,
+            sampling_rate=sampling_rate,
             target_length=dataset_configs.target_length,
             mean=dataset_configs.mean,
             std=dataset_configs.std,
@@ -59,9 +58,8 @@ class HFDataModule(pl.LightningDataModule):
         )
 
         self.test_transform = EvalTransform(
-            mel_params=transform_configs.mel_params,
-            spectrogram_params=transform_configs.spectrogram_params,
-            window_params=transform_configs.window_params,
+            transform_params=transform_configs,
+            sampling_rate=sampling_rate,
             target_length=dataset_configs.target_length,
             mean=dataset_configs.mean,
             std=dataset_configs.std,
@@ -95,23 +93,26 @@ class HFDataModule(pl.LightningDataModule):
     
     def setup(self, stage:str) -> None: 
         if stage == "fit" or stage is None: 
-            dataset = load_dataset(
-                self.hf_path, self.hf_name, split=self.train_split, cache_dir=self.data_dir
-            )
+            if self.save_to_disk: 
+                dataset = load_from_disk(f"{self.save_to_disk}/train")
+            else: 
+                dataset = load_dataset(
+                    self.hf_path, self.hf_name, split=self.train_split, cache_dir=self.data_dir
+                )
 
-            if "AudioSet" in self.hf_path:
-                with open("/home/lrauch/projects/birdMAE/data/audioset_ontology_custom527.json", "r") as f:
-                    ontology = json.load(f)
-                num_classes = len(ontology)
-                label_names = list(ontology.keys())
-                class_label = Sequence(ClassLabel(num_classes=num_classes, names=label_names))
-                dataset = dataset.cast_column("human_labels", class_label)
-                dataset = dataset.map(self._one_hot_encode, batched=True, batch_size=1000)
+                if "AudioSet" in self.hf_path:
+                    with open("/home/lrauch/projects/birdMAE/data/audioset_ontology_custom527.json", "r") as f:
+                        ontology = json.load(f)
+                    num_classes = len(ontology)
+                    label_names = list(ontology.keys())
+                    class_label = Sequence(ClassLabel(num_classes=num_classes, names=label_names))
+                    dataset = dataset.cast_column("human_labels", class_label)
+                    dataset = dataset.map(self._one_hot_encode, batched=True, batch_size=1000, load_from_cache_file=True)
 
-                rows_to_remove = [15_759,17_532] #corrupted
-                all_indices = list(range(len(dataset)))
-                indices_to_keep = [i for i in all_indices if i not in rows_to_remove]
-                dataset = dataset.select(indices_to_keep)
+                    rows_to_remove = [15_759,17_532] #corrupted
+                    all_indices = list(range(len(dataset)))
+                    indices_to_keep = [i for i in all_indices if i not in rows_to_remove]
+                    dataset = dataset.select(indices_to_keep)
 
 
             if self.test_size:
@@ -130,7 +131,7 @@ class HFDataModule(pl.LightningDataModule):
             self.train_data.set_format("numpy", columns=self.columns, output_all_columns=False)
             self.train_data = self.train_data.cast_column("audio", Audio(sampling_rate=self.sampling_rate, mono=True, decode=True))
             self.train_data.set_transform(self.train_transform)
-            #self.train_data = self.train_data.select(range(100))
+            #self.train_data = self.train_data.select(range(20))
 
             if self.val_data:
                 self.val_data.set_format("numpy", columns=self.columns, output_all_columns=False)
@@ -138,25 +139,28 @@ class HFDataModule(pl.LightningDataModule):
                 self.val_data.set_transform(self.val_transform)
         
         if stage == "test": 
-            self.test_data = load_dataset(self.hf_path, self.hf_name, split=self.test_split, cache_dir=self.data_dir)
+            if self.save_to_disk: 
+                self.test_data = load_from_disk(f"{self.save_to_disk}/test")
+            else: 
+                self.test_data = load_dataset(self.hf_path, self.hf_name, split=self.test_split, cache_dir=self.data_dir)
 
-            if "AudioSet" in self.hf_path:
-                with open("/home/lrauch/projects/birdMAE/data/audioset_ontology_custom527.json", "r") as f:
-                    ontology = json.load(f)
-                num_classes = len(ontology)
-                label_names = list(ontology.keys())
-                class_label = Sequence(ClassLabel(num_classes=num_classes, names=label_names))
-                self.test_data = self.test_data.cast_column("human_labels", class_label)
-                self.test_data = self.test_data.map(self._one_hot_encode, batched=True, batch_size=1000)
+                if "AudioSet" in self.hf_path:
+                    with open("/home/lrauch/projects/birdMAE/data/audioset_ontology_custom527.json", "r") as f:
+                        ontology = json.load(f)
+                    num_classes = len(ontology)
+                    label_names = list(ontology.keys())
+                    class_label = Sequence(ClassLabel(num_classes=num_classes, names=label_names))
+                    self.test_data = self.test_data.cast_column("human_labels", class_label)
+                    self.test_data = self.test_data.map(self._one_hot_encode, batched=True, batch_size=1000)
 
-                rows_to_remove = [6_182] #corrupted
-                all_indices = list(range(len(self.test_data)))
-                indices_to_keep = [i for i in all_indices if i not in rows_to_remove]
-                self.test_data = self.test_data.select(indices_to_keep)
+                    rows_to_remove = [6_182] #corrupted
+                    all_indices = list(range(len(self.test_data)))
+                    indices_to_keep = [i for i in all_indices if i not in rows_to_remove]
+                    self.test_data = self.test_data.select(indices_to_keep)
 
             self.test_data.set_format("numpy", columns=self.columns, output_all_columns=False)
             self.test_data = self.test_data.cast_column("audio", Audio(sampling_rate=self.sampling_rate, mono=True, decode=True))
-            self.test_data.set_transform(self.train_transform)
+            self.test_data.set_transform(self.test_transform)
 
     def train_dataloader(self) -> DataLoader:
         return DataLoader(
@@ -181,17 +185,28 @@ class HFDataModule(pl.LightningDataModule):
             shuffle=self.test_loader_configs.shuffle
         )
     
+    # def _one_hot_encode(self, batch):
+    #     label_list = [y for y in batch[self.columns[1]]]
+    #     class_one_hot_matrix = torch.zeros(
+    #         (len(label_list), self.num_classes), dtype=torch.float
+    #     )
+
+    #     for class_idx, idx in enumerate(label_list):
+    #         class_one_hot_matrix[class_idx, idx] = 1
+
+    #     class_one_hot_matrix = torch.tensor(class_one_hot_matrix, dtype=torch.float32)
+
+    #     return {self.columns[1]: class_one_hot_matrix}
+
     def _one_hot_encode(self, batch):
         label_list = [y for y in batch[self.columns[1]]]
-        class_one_hot_matrix = torch.zeros(
-            (len(label_list), self.num_classes), dtype=torch.float
-        )
-
-        for class_idx, idx in enumerate(label_list):
-            class_one_hot_matrix[class_idx, idx] = 1
-
-        class_one_hot_matrix = torch.tensor(class_one_hot_matrix, dtype=torch.float32)
-
+        
+        # Use numpy instead of torch for caching
+        class_one_hot_matrix = np.zeros((len(label_list), self.num_classes), dtype=np.float32)
+        
+        for class_idx, indices in enumerate(label_list):
+            class_one_hot_matrix[class_idx, indices] = 1.0
+        
         return {self.columns[1]: class_one_hot_matrix}
         
 # def one_hot_encode(batch):

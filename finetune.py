@@ -9,6 +9,7 @@ from pathlib import Path
 
 from datamodule import HFDataModule
 from util.pylogger import get_pylogger
+from util.log_hparams import log_hyperparameters
 from build import instantiate_callbacks, build_model
 
 log = get_pylogger(__name__)
@@ -55,6 +56,18 @@ def finetune(cfg: DictConfig):
     if pretrained_weights_path:
         log.info(f"Load pretrained weights from {pretrained_weights_path}")
         model.load_pretrained_weights(pretrained_weights_path)
+    
+    object_dict = {
+        "cfg": cfg, 
+        "datamodule": datamodule,
+        "model": model,
+        "logger": logger,
+        "trainer": trainer
+    }
+
+    if logger: 
+        log.info("Logging hyperparameters")
+        log_hyperparameters(object_dict)
 
     if cfg.train: 
         log.info("Start training")

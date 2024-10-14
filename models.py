@@ -421,6 +421,7 @@ class VIT(L.LightningModule, VisionTransformer):
                  mlp_ratio,
                  qkv_bias,
                  eps,
+                 drop_path,
                  num_heads,
                  depth,
                  num_classes,
@@ -444,7 +445,8 @@ class VIT(L.LightningModule, VisionTransformer):
             mlp_ratio = mlp_ratio,
             qkv_bias = qkv_bias,
             norm_layer = partial(nn.LayerNorm, eps=eps),
-            num_classes = num_classes
+            num_classes = num_classes,
+            drop_path_rate=drop_path,
         )
         self.save_hyperparameters()
         self.img_size = (img_size_x, img_size_y)
@@ -472,6 +474,8 @@ class VIT(L.LightningModule, VisionTransformer):
         self.train_metric = metric.clone()
         self.val_metric = metric.clone()
         self.test_metric = metric.clone()
+        self.test_predictions = []
+        self.test_targets = []
 
     def forward_features(self, x):
         B = x.shape[0]
@@ -498,7 +502,13 @@ class VIT(L.LightningModule, VisionTransformer):
         x = self.forward_features(x)
         pred = self.head(x)
         return pred 
-
+    
+    # def on_train_batch_start(self, batch, batch_idx, unused=0):
+    #     if batch_idx % 100 == 0:  # Log every 100 batches
+    #         print(f"Batch {batch_idx}:")
+    #         print(f"  GPU memory allocated: {torch.cuda.memory_allocated() / 1e9:.2f} GB")
+    #         print(f"  GPU memory reserved: {torch.cuda.memory_reserved() / 1e9:.2f} GB")
+        
 
     def training_step(self, batch, batch_idx):
         audio = batch["audio"]
@@ -535,9 +545,17 @@ class VIT(L.LightningModule, VisionTransformer):
             loss  = self.loss(pred, targets)
         except:
             loss = self.loss(pred, targets.float())
-        metric = self.test_metric(pred, targets)
-        self.log(f'test_{self.test_metric.__class__.__name__}', metric, on_step=False, on_epoch=True, prog_bar=True)
+        
+        self.test_predictions.append(pred.detach().cpu())
+        self.test_targets.append(targets.detach().cpu())
+
         self.log('test_loss', loss, on_step=False, on_epoch=True, prog_bar=True)
+    
+    def on_test_epoch_end(self):
+        preds = torch.cat(self.test_predictions)
+        targets = torch.cat(self.test_targets)
+        metric = self.test_metric(preds, targets)
+        self.log(f'test_{self.test_metric.__class__.__name__}', metric, on_epoch=True, prog_bar=True)
 
     def configure_optimizers(self):
         self.optimizer = hydra.utils.instantiate(

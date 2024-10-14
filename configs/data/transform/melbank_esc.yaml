@@ -1,0 +1,12 @@
+fbank:
+  htk_compat: true
+  sample_frequency: ${module.network.sampling_rate}
+  use_energy: false
+  window_type: hanning
+  num_mel_bins: 128
+  dither: 0.0
+  frame_shift: 10 
+
+mixup: null
+timem: 96
+freqm: 24

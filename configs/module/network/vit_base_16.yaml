@@ -1,7 +1,7 @@
 name: VIT
 norm_layer: nn.LayerNorm
 sampling_rate: 32_000
-img_size_x: ${data.transform.target_length}
+img_size_x: ${data.dataset.target_length}
 img_size_y: 128
 patch_size: 16
 in_chans: 1
@@ -13,6 +13,7 @@ qkv_bias: True
 eps: 1e-6
 num_heads: 12
 depth: 12
+drop_path: 0.1
 num_classes: ${data.dataset.num_classes} 
 pos_trainable: False
 pretrained_weights_path: ${paths.root_dir}/weights/amae_as2m_pretrained.pth
