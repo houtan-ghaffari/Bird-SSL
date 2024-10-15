@@ -131,12 +131,23 @@ class HFDataModule(pl.LightningDataModule):
             self.train_data.set_format("numpy", columns=self.columns, output_all_columns=False)
             self.train_data = self.train_data.cast_column("audio", Audio(sampling_rate=self.sampling_rate, mono=True, decode=True))
             self.train_data.set_transform(self.train_transform)
-            #self.train_data = self.train_data.select(range(20))
+            #self.train_data = self.train_data.select(range(100))
 
             if self.val_data:
                 self.val_data.set_format("numpy", columns=self.columns, output_all_columns=False)
                 self.val_data = self.val_data.cast_column("audio", Audio(sampling_rate=self.sampling_rate, mono=True, decode=True))
                 self.val_data.set_transform(self.val_transform)
+            
+            if self.test_size == 999: # not nice, only for as
+                if self.save_to_disk: 
+                    self.val_data = load_from_disk(f"{self.save_to_disk}/test")
+                else: 
+                    self.val_data = load_dataset(self.hf_path, self.hf_name, split=self.test_split, cache_dir=self.data_dir)
+
+                self.val_data.set_format("numpy", columns=self.columns, output_all_columns=False)
+                self.val_data = self.val_data.cast_column("audio", Audio(sampling_rate=self.sampling_rate, mono=True, decode=True))
+                self.val_data.set_transform(self.val_transform)
+
         
         if stage == "test": 
             if self.save_to_disk: 
@@ -185,19 +196,6 @@ class HFDataModule(pl.LightningDataModule):
             shuffle=self.test_loader_configs.shuffle
         )
     
-    # def _one_hot_encode(self, batch):
-    #     label_list = [y for y in batch[self.columns[1]]]
-    #     class_one_hot_matrix = torch.zeros(
-    #         (len(label_list), self.num_classes), dtype=torch.float
-    #     )
-
-    #     for class_idx, idx in enumerate(label_list):
-    #         class_one_hot_matrix[class_idx, idx] = 1
-
-    #     class_one_hot_matrix = torch.tensor(class_one_hot_matrix, dtype=torch.float32)
-
-    #     return {self.columns[1]: class_one_hot_matrix}
-
     def _one_hot_encode(self, batch):
         label_list = [y for y in batch[self.columns[1]]]
         

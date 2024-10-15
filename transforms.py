@@ -50,6 +50,8 @@ class BaseTransform:
         )    
 
         self.mixup = transform_params.mixup
+        self.freqm = None
+        self.timem = None
 
         if transform_params.freqm:
             self.freqm = FrequencyMasking(freq_mask_param=transform_params.freqm)

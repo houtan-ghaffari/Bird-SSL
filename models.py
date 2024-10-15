@@ -13,6 +13,8 @@ from util.pos_embed import get_2d_sincos_pos_embed, get_2d_sincos_pos_embed_flex
 from util.patch_embed import PatchEmbed_new, PatchEmbed_org
 from transformers import get_cosine_schedule_with_warmup
 
+from util.lr_decay import param_groups_lrd
+
 class MAE_Encoder(nn.Module):
     def __init__(self, 
                  img_size_x,
@@ -309,7 +311,7 @@ class AudioMAE(L.LightningModule):
     
         if self.scheduler_cfg: 
             num_training_steps = self.trainer.estimated_stepping_batches
-            warmup_ratio = 0.05 # hard coded
+            warmup_ratio = 0.067 # hard coded
             num_warmup_steps = num_training_steps * warmup_ratio
 
             scheduler = get_cosine_schedule_with_warmup(
@@ -416,7 +418,6 @@ class VIT(L.LightningModule, VisionTransformer):
                  in_chans,
                  embed_dim,
                  global_pool,
-                 mask2d,
                  norm_layer,
                  mlp_ratio,
                  qkv_bias,
@@ -430,7 +431,11 @@ class VIT(L.LightningModule, VisionTransformer):
                  pretrained_weights_path, 
                  target_length,
                  loss,
-                 metric):
+                 metric,
+                 mask_t_prob,
+                 mask_f_prob,
+                 mask2d
+    ):
         
         L.LightningModule.__init__(self)
         
@@ -464,8 +469,14 @@ class VIT(L.LightningModule, VisionTransformer):
 
         self.loss = hydra.utils.instantiate(loss)
         self.optimizer = None
-        self.optimizer_cfg = optimizer
+        self.optimizer_cfg = optimizer.target
+        self.train_batch_size = optimizer.extras.train_batch_size
+        self.layer_decay = optimizer.extras.layer_decay
         self.scheduler_cfg = scheduler
+
+        self.mask_2d = mask2d
+        self.mask_t_prob = mask_t_prob
+        self.mask_f_prob = mask_f_prob
 
         self.pretrained_weights_path = pretrained_weights_path
         self.target_length = target_length
@@ -474,6 +485,8 @@ class VIT(L.LightningModule, VisionTransformer):
         self.train_metric = metric.clone()
         self.val_metric = metric.clone()
         self.test_metric = metric.clone()
+        self.val_predictions = []
+        self.val_targets = []
         self.test_predictions = []
         self.test_targets = []
 
@@ -497,11 +510,76 @@ class VIT(L.LightningModule, VisionTransformer):
             outcome = x[:, 0]
 
         return outcome
+    
+    def forward_features_mask(self, x):
+        B = x.shape[0]
+        x = self.patch_embed(x) # batch, patch, embed
+        x = x + self.pos_embed[:, 1:, :] # strange
 
-    def forward(self, x, v=None, mask_t_prob=0.0, mask_f_prob=0.0):
-        x = self.forward_features(x)
+        if self.mask_2d: 
+            x, mask, ids_restore = self.random_masking_2d(x)
+        else:
+            pass
+
+        cls_token = self.cls_token + self.pos_embed[:, :1, :]
+        cls_tokens = cls_token.expand(B, -1, -1)  # stole cls_tokens impl from Phil Wang, thanks
+        x = torch.cat((cls_tokens, x), dim=1)
+        x = self.pos_drop(x)        
+
+        for blk in self.blocks:
+            x = blk(x)
+
+        if self.global_pool:
+            x = x[:, 1:, :].mean(dim=1)  # global pool without cls token
+            outcome = self.fc_norm(x)
+        else:
+            x = self.norm(x)
+            outcome = x[:, 0]
+
+        return outcome 
+
+    def forward(self, x):
+        if self.mask_t_prob > 0.0 or self.mask_f_prob > 0.0:
+            x = self.forward_features_mask(x)
+        else:
+            x = self.forward_features(x)
         pred = self.head(x)
         return pred 
+
+    def random_masking_2d(self, x):
+        N, L, D = x.shape
+        T = 64 # AUDIOSET
+        F = 8 # AUDIOSET
+
+        # mask T
+        x = x.reshape(N, T, F, D)
+        len_keep_T = int(T * (1 - self.mask_t_prob))
+        noise = torch.rand(N, T, device=x.device)  # noise in [0, 1]
+        # sort noise for each sample
+        ids_shuffle = torch.argsort(noise, dim=1)  # ascend: small is keep, large is remove
+        ids_keep = ids_shuffle[:, :len_keep_T]
+        index = ids_keep.unsqueeze(-1).unsqueeze(-1).repeat(1, 1, F, D)
+        #x_masked = torch.gather(x, dim=1, index=index)
+        #x_masked = x_masked.reshape(N,len_keep_T*F,D)
+        x = torch.gather(x, dim=1, index=index) # N, len_keep_T(T'), F, D
+
+        # mask F
+        #x = x.reshape(N, T, F, D)
+        x = x.permute(0,2,1,3) # N T' F D => N F T' D
+        len_keep_F = int(F * (1 - self.mask_f_prob))
+        noise = torch.rand(N, F, device=x.device)  # noise in [0, 1]
+        # sort noise for each sample
+        ids_shuffle = torch.argsort(noise, dim=1)  # ascend: small is keep, large is remove
+        ids_keep = ids_shuffle[:, :len_keep_F]
+        #index = ids_keep.unsqueeze(-1).unsqueeze(-1).repeat(1, 1, T, D)
+        index = ids_keep.unsqueeze(-1).unsqueeze(-1).repeat(1, 1, len_keep_T, D)
+        x_masked = torch.gather(x, dim=1, index=index)
+        x_masked = x_masked.permute(0,2,1,3) # N F' T' D => N T' F' D 
+        #x_masked = x_masked.reshape(N,len_keep*T,D)
+        x_masked = x_masked.reshape(N,len_keep_F*len_keep_T,D)
+            
+        return x_masked, None, None
+
     
     # def on_train_batch_start(self, batch, batch_idx, unused=0):
     #     if batch_idx % 100 == 0:  # Log every 100 batches
@@ -521,6 +599,9 @@ class VIT(L.LightningModule, VisionTransformer):
             loss = self.loss(pred, targets.float())
         self.log('train_loss', loss, on_step=True, on_epoch=True, prog_bar=True)
         return loss
+    
+    # def on_train_epoch_end(self):
+    #     self.trainer.test(model=self, datamodule=self.trainer.datamodule)
 
     def validation_step(self, batch, batch_idx):
         audio = batch["audio"]
@@ -532,13 +613,27 @@ class VIT(L.LightningModule, VisionTransformer):
         except:
             loss = self.loss(pred, targets.float())
 
-        metric = self.val_metric(pred, targets)
-        self.log(f'val_{self.val_metric.__class__.__name__}', metric, on_step=False, on_epoch=True, prog_bar=True)
+        #metric = self.val_metric(pred, targets)
+        self.val_predictions.append(pred.detach().cpu())
+        self.val_targets.append(targets.detach().cpu())
+
+        #self.log(f'val_{self.val_metric.__class__.__name__}', metric, on_step=False, on_epoch=True, prog_bar=True)
         self.log('val_loss', loss, on_step=False, on_epoch=True, prog_bar=True)
+    
+    def on_validation_epoch_end(self):
+        preds = torch.cat(self.val_predictions)
+        targets = torch.cat(self.val_targets)
+        metric = self.val_metric(preds, targets)
+        self.log(f'val_{self.val_metric.__class__.__name__}', metric, on_step=False, on_epoch=True, prog_bar=True)
+        print("val", metric)
     
     def test_step(self, batch, batch_idx):
         audio = batch["audio"]
         targets = batch["label"]
+
+        self.mask_t_prob = 0.0
+        self.mask_f_prob = 0.0 #fix later!
+
         pred = self(audio)
         targets = targets.long()
         try:
@@ -558,9 +653,28 @@ class VIT(L.LightningModule, VisionTransformer):
         self.log(f'test_{self.test_metric.__class__.__name__}', metric, on_epoch=True, prog_bar=True)
 
     def configure_optimizers(self):
-        self.optimizer = hydra.utils.instantiate(
-            self.optimizer_cfg, 
-            params=self.parameters())
+
+        #heuristic:
+        eff_batch_size = self.trainer.accumulate_grad_batches * self.trainer.num_devices * self.train_batch_size
+        self.optimizer_cfg["lr"] = self.optimizer_cfg["lr"] * eff_batch_size / 256
+
+        if self.layer_decay:
+            params = param_groups_lrd(
+                model=self,
+                weight_decay=self.optimizer_cfg["weight_decay"],
+                no_weight_decay_list=self.no_weight_decay(),
+                layer_decay=self.layer_decay
+            )
+
+            self.optimizer = hydra.utils.instantiate(
+                self.optimizer_cfg, 
+                params
+            )
+
+        else:
+            self.optimizer = hydra.utils.instantiate(
+                self.optimizer_cfg, 
+                params=self.parameters())
     
         if self.scheduler_cfg: 
             num_training_steps = self.trainer.estimated_stepping_batches

@@ -1,7 +1,12 @@
-_target_: torch.optim.AdamW
-lr: 2e-4
-weight_decay: 1e-4
-betas: [0.9, 0.95]
+target:
+  _target_: torch.optim.AdamW
+  #lr: 1e-3
+  lr: 1e-3
+  weight_decay: 1e-4
+  betas: [0.9, 0.95]
 
+extras:
+  train_batch_size: ${data.loaders.train.batch_size}
+  layer_decay: 0.75
 
 

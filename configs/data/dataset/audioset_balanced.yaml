@@ -6,7 +6,7 @@ num_classes: 527
 clip_duration: 10.0
 train_split: "train"
 test_split: "test"
-test_size: 0.05
+test_size: 999
 num_workers: 4
 columns: ["audio", "human_labels"]
 target_length: 1024 #dopplung in melscale! change!

@@ -46,7 +46,7 @@ def finetune(cfg: DictConfig):
     callbacks = instantiate_callbacks(cfg["callbacks"])
                                       
     log.info("Setup trainer")
-    trainer = L.Trainer(**cfg.trainer, callbacks=callbacks, logger=logger)
+    trainer = L.Trainer(**cfg.trainer, callbacks=callbacks, logger=logger, profiler="simple")
 
     log.info("Setup model")
     model = build_model(cfg.module)
@@ -71,12 +71,12 @@ def finetune(cfg: DictConfig):
 
     if cfg.train: 
         log.info("Start training")
-        trainer.fit(model=model, datamodule=datamodule)
+        trainer.fit(model=model, datamodule=datamodule) 
+                    #,ckpt_path="/home/lrauch/projects/birdMAE/logs/finetune/runs/audioset_balanced/VIT/2024-10-14_170415/model_checkpoints/last.ckpt")
 
     if cfg.test:
         log.info("Start testing")
-        trainer.test(model=model, datamodule=datamodule)
-    
+        trainer.test(model=model, datamodule=datamodule, ckpt_path="last")
 
 if __name__ == "__main__":
     finetune()

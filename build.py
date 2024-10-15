@@ -37,7 +37,7 @@ def build_model(cfg_module: DictConfig):
             in_chans=cfg_module.network.in_chans,
             embed_dim=cfg_module.network.embed_dim,
             global_pool=cfg_module.network.global_pool,
-            mask2d=cfg_module.network.mask2d,
+            drop_path=cfg_module.network.drop_path,
             norm_layer=cfg_module.network.norm_layer,
             mlp_ratio=cfg_module.network.mlp_ratio,
             qkv_bias=cfg_module.network.qkv_bias,
@@ -50,7 +50,10 @@ def build_model(cfg_module: DictConfig):
             optimizer=cfg_module.optimizer,
             scheduler=cfg_module.scheduler,
             loss=cfg_module.loss,
-            metric=cfg_module.metric
+            metric=cfg_module.metric,
+            mask2d=cfg_module.network.mask2d,
+            mask_t_prob=cfg_module.network.mask_t_prob,
+            mask_f_prob=cfg_module.network.mask_f_prob,
         )
 
     else:
