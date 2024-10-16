@@ -732,11 +732,11 @@ class VIT(L.LightningModule, VisionTransformer):
             pos_embed = get_2d_sincos_pos_embed_flexible(self.pos_embed.size(-1), patch_hw, cls_token=True) # not trained, overwrite from sincos
             self.pos_embed.data = torch.from_numpy(pos_embed).float().unsqueeze(0) 
 
-        elif dataset_name == "audioset": 
+        elif dataset_name == "audioset_balanced": 
             self.patch_embed = PatchEmbed_new(img_size=img_size, patch_size=(16,16), in_chans=1, embed_dim=self.embed_dim, stride=16) # no overlap. stride=img_size=16
             num_patches = self.patch_embed.num_patches
             #num_patches = 512 # assume audioset, 1024//16=64, 128//16=8, 512=64x8
-            self.pos_embed = nn.Parameter(torch.zeros(1, num_patches + 1, self.emb_dim), requires_grad=False)  # fixed sin-cos embedding
+            self.pos_embed = nn.Parameter(torch.zeros(1, num_patches + 1, self.embed_dim), requires_grad=False)  # fixed sin-cos embedding
 
             checkpoint = torch.load(pretrained_weights_path, map_location="cpu")
             pretrained_state_dict = checkpoint["model"]
