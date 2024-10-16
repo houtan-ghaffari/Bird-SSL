@@ -36,6 +36,7 @@ class HFDataModule(pl.LightningDataModule):
         self.columns = dataset_configs.columns
         self.sampling_rate = sampling_rate
         self.save_to_disk = dataset_configs.save_to_disk
+        self.test_in_val = dataset_configs.test_in_val
 
         self.train_transform = TrainTransform(
             transform_params=transform_configs,
@@ -138,7 +139,7 @@ class HFDataModule(pl.LightningDataModule):
                 self.val_data = self.val_data.cast_column("audio", Audio(sampling_rate=self.sampling_rate, mono=True, decode=True))
                 self.val_data.set_transform(self.val_transform)
             
-            if self.test_size == 999: # not nice, only for as
+            if self.test_in_val == True: # not nice, only for as
                 if self.save_to_disk: 
                     self.val_data = load_from_disk(f"{self.save_to_disk}/test")
                 else: 

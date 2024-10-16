@@ -8,11 +8,13 @@ from timm.models.vision_transformer import PatchEmbed
 from timm.models.vision_transformer import Block
 from timm.models.swin_transformer import SwinTransformerBlock
 from timm.models.vision_transformer import VisionTransformer
+from timm.models.layers import trunc_normal_
 from functools import partial
 from util.pos_embed import get_2d_sincos_pos_embed, get_2d_sincos_pos_embed_flexible
 from util.patch_embed import PatchEmbed_new, PatchEmbed_org
 from transformers import get_cosine_schedule_with_warmup
-
+import math
+from torch.optim.lr_scheduler import _LRScheduler
 from util.lr_decay import param_groups_lrd
 
 class MAE_Encoder(nn.Module):
@@ -461,6 +463,7 @@ class VIT(L.LightningModule, VisionTransformer):
         self.fc_norm = norm_layer(embed_dim)
         self.mask_2d = mask2d
 
+        self.embed_dim = embed_dim 
         self.num_heads = num_heads
         self.depth = depth
         self.mlp_ratio = mlp_ratio
@@ -626,6 +629,9 @@ class VIT(L.LightningModule, VisionTransformer):
         metric = self.val_metric(preds, targets)
         self.log(f'val_{self.val_metric.__class__.__name__}', metric, on_step=False, on_epoch=True, prog_bar=True)
         print("val", metric)
+
+        self.val_predictions = []
+        self.val_targets = []
     
     def test_step(self, batch, batch_idx):
         audio = batch["audio"]
@@ -663,7 +669,7 @@ class VIT(L.LightningModule, VisionTransformer):
                 model=self,
                 weight_decay=self.optimizer_cfg["weight_decay"],
                 no_weight_decay_list=self.no_weight_decay(),
-                layer_decay=self.layer_decay
+                layer_decay=self.layer_decay #scaling favtor for ech layer 0.75^layer ..--> 0.75^0
             )
 
             self.optimizer = hydra.utils.instantiate(
@@ -678,14 +684,21 @@ class VIT(L.LightningModule, VisionTransformer):
     
         if self.scheduler_cfg: 
             num_training_steps = self.trainer.estimated_stepping_batches
-            warmup_ratio = 0.05 # hard coded
+            warmup_ratio = 0.067 # hard coded
             num_warmup_steps = num_training_steps * warmup_ratio
 
-            scheduler = get_cosine_schedule_with_warmup(
+            # scheduler = get_cosine_schedule_with_warmup(
+            #     optimizer=self.optimizer,
+            #     num_warmup_steps=num_warmup_steps,
+            #     num_training_steps=num_training_steps
+            # )
+
+            scheduler = CosineWarmupScheduler(
                 optimizer=self.optimizer,
-                num_warmup_steps=num_warmup_steps,
-                num_training_steps=num_training_steps
+                warmup_steps=num_warmup_steps,
+                total_steps=num_training_steps
             )
+
             scheduler_dict = {
                 "scheduler": scheduler,
                 "interval": "step",  # Update at every step
@@ -697,26 +710,72 @@ class VIT(L.LightningModule, VisionTransformer):
         
         return {"optimizer": self.optimizer}      
     
-    def load_pretrained_weights(self, pretrained_weights_path): 
+    def load_pretrained_weights(self, pretrained_weights_path, dataset_name): 
         img_size = (self.target_length, 128)
-        num_patches = 512 # audioset
 
-        self.patch_embed = PatchEmbed(img_size, 16, 1, 768)
-        self.pos_embed = nn.Parameter(torch.zeros(1, num_patches + 1, 768), requires_grad=False) #to load pretrained pos embed
-        
-        pretrained_state_dict = torch.load(pretrained_weights_path, map_location="cpu")["model"]
+        if dataset_name == "esc50":
+            num_patches = 512 # audioset
 
-        for k in ['head.weight', 'head.bias']:
-            if k in pretrained_state_dict and pretrained_state_dict[k].shape != self.state_dict[k].shape:
-                print(f"Removing key {k} from pretrained checkpoint")
-                del pretrained_state_dict[k]
-        
-        self.load_state_dict(pretrained_state_dict, strict=False)
+            self.patch_embed = PatchEmbed(img_size, 16, 1, 768)
+            self.pos_embed = nn.Parameter(torch.zeros(1, num_patches + 1, 768), requires_grad=False) #to load pretrained pos embed
+            
+            pretrained_state_dict = torch.load(pretrained_weights_path, map_location="cpu")["model"]
 
-        patch_hw = (img_size[1] // 16, img_size[0] // 16) # 16=patchsize
-        pos_embed = get_2d_sincos_pos_embed_flexible(self.pos_embed.size(-1), patch_hw, cls_token=True) # not trained, overwrite from sincos
-        self.pos_embed.data = torch.from_numpy(pos_embed).float().unsqueeze(0) 
+            for k in ['head.weight', 'head.bias']:
+                if k in pretrained_state_dict and pretrained_state_dict[k].shape != self.state_dict[k].shape:
+                    print(f"Removing key {k} from pretrained checkpoint")
+                    del pretrained_state_dict[k]
+            
+            self.load_state_dict(pretrained_state_dict, strict=False)
 
+            patch_hw = (img_size[1] // 16, img_size[0] // 16) # 16=patchsize
+            pos_embed = get_2d_sincos_pos_embed_flexible(self.pos_embed.size(-1), patch_hw, cls_token=True) # not trained, overwrite from sincos
+            self.pos_embed.data = torch.from_numpy(pos_embed).float().unsqueeze(0) 
 
+        elif dataset_name == "audioset": 
+            self.patch_embed = PatchEmbed_new(img_size=img_size, patch_size=(16,16), in_chans=1, embed_dim=self.embed_dim, stride=16) # no overlap. stride=img_size=16
+            num_patches = self.patch_embed.num_patches
+            #num_patches = 512 # assume audioset, 1024//16=64, 128//16=8, 512=64x8
+            self.pos_embed = nn.Parameter(torch.zeros(1, num_patches + 1, self.emb_dim), requires_grad=False)  # fixed sin-cos embedding
 
+            checkpoint = torch.load(pretrained_weights_path, map_location="cpu")
+            pretrained_state_dict = checkpoint["model"]
+            state_dict = self.state_dict()
 
+            for k in ["head.weight", "head.bias"]:
+                if k in pretrained_state_dict and pretrained_state_dict[k].shape != state_dict[k].shape:
+                    print(f"Removing key {k} from pretrained checkpoint")
+                    del pretrained_state_dict[k]
+
+            self.load_state_dict(pretrained_state_dict, strict=False)
+
+            trunc_normal_(self.head.weight, std=2e-5)
+
+class CosineWarmupScheduler(_LRScheduler):
+    def __init__(self, optimizer, warmup_steps, total_steps, last_epoch=-1, min_lr=1e-6):
+        self.warmup_steps = warmup_steps
+        self.total_steps = total_steps
+        self.min_lr = min_lr
+
+        # Store initial lr, min_lr, and lr_scale for each param group
+        self.init_lrs = []
+        self.min_lrs = []
+        self.lr_scales = []
+        for param_group in optimizer.param_groups:
+            self.init_lrs.append(param_group.get('initial_lr', param_group['lr'])) #could be kept for later use when doing per group lrs
+            self.min_lrs.append(param_group.get('min_lr', self.min_lr)) # could be kept for later use when doing per group lrs
+            self.lr_scales.append(param_group.get('lr_scale', 1.0))
+        super().__init__(optimizer, last_epoch)
+
+    def get_lr(self):
+        step = max(0, self.last_epoch)
+        lrs = []
+        for idx, (init_lr, min_lr, lr_scale) in enumerate(zip(self.init_lrs, self.min_lrs, self.lr_scales)):
+            if step < self.warmup_steps:
+                lr = init_lr * step / float(max(1, self.warmup_steps))
+            else:
+                progress = float(step - self.warmup_steps) / float(max(1, self.total_steps - self.warmup_steps))
+                lr = min_lr + (init_lr - min_lr) * 0.5 * (1. + math.cos(math.pi * progress))
+            lr *= lr_scale
+            lrs.append(lr)
+        return lrs

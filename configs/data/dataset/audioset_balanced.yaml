@@ -6,10 +6,11 @@ num_classes: 527
 clip_duration: 10.0
 train_split: "train"
 test_split: "test"
-test_size: 999
+test_size: null
 num_workers: 4
 columns: ["audio", "human_labels"]
 target_length: 1024 #dopplung in melscale! change!
 mean: -4.2677393
 std: 4.5689974
 save_to_disk: ${paths.dataset_dir}/saved_to_disk
+test_in_val: true

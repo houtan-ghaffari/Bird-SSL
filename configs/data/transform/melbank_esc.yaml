@@ -8,5 +8,11 @@ fbank:
   frame_shift: 10 
 
 mixup: null
-timem: 96
-freqm: 24
+# timem: 96
+# freqm: 24
+
+freqm: null
+timem: null
+mask2d: false
+mask_t_prob: 0.2
+mask_f_prob: 0.2

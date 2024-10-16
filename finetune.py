@@ -46,16 +46,17 @@ def finetune(cfg: DictConfig):
     callbacks = instantiate_callbacks(cfg["callbacks"])
                                       
     log.info("Setup trainer")
-    trainer = L.Trainer(**cfg.trainer, callbacks=callbacks, logger=logger, profiler="simple")
+    trainer = L.Trainer(**cfg.trainer, callbacks=callbacks, logger=logger)
 
     log.info("Setup model")
     model = build_model(cfg.module)
 
     pretrained_weights_path = cfg.module.network.pretrained_weights_path
+    #pretrained_weights_path = None
 
     if pretrained_weights_path:
         log.info(f"Load pretrained weights from {pretrained_weights_path}")
-        model.load_pretrained_weights(pretrained_weights_path)
+        model.load_pretrained_weights(pretrained_weights_path, cfg.data.dataset.name)
     
     object_dict = {
         "cfg": cfg, 

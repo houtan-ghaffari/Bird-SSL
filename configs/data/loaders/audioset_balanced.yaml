@@ -5,7 +5,7 @@ train:
   pin_memory: false
 
 val:
-  num_workers: 12
+  num_workers: 24
   batch_size: 48
   shuffle: false
   pin_memory: false
