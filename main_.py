@@ -627,25 +627,502 @@ plt.show()
 fbank_features.shape
 
 #%%
-import matplotlib.pyplot as plt
 
-# Create a figure and axis
+from datasets import load_dataset, Audio 
+
+
+dataset = load_dataset("DBD-research-group/BirdSet", "HSN", cache_dir="/home/lrauch/projects/birdMAE/data/HSN", num_proc=5)
+
+#%%
+dataset["train"]["length"][0]
+#%%
+
+dataset["train"][0]["audio"]
+
+
+#%%
+#from birdset.datamodule.base_datamodule import DatasetConfig
+
+from birdset.configs.datamodule_configs import DatasetConfig
+from birdset.datamodule.birdset_datamodule import BirdSetDataModule
+
+#%%
+DatasetConfig()
+
+#%%
+
+from birdset.datamodule.base_datamodule import DatasetConfig
+from birdset.datamodule.birdset_datamodule import BirdSetDataModule
+from datasets import load_from_disk
+
+# initiate the data module
+dm = BirdSetDataModule(
+    dataset= DatasetConfig(
+        data_dir="/home/lrauch/projects/birdMAE/data/HSN", # specify your data directory!
+        hf_path='DBD-research-group/BirdSet',
+        hf_name='HSN',
+        n_workers=3,
+        val_split=0.2,
+        task="multilabel",
+        classlimit=500, #limit of samples per class 
+        eventlimit=5, #limit of events that are extracted for each sample
+        sampling_rate=32000,
+    ),
+)
+
+#%%
+
+dm.prepare_data()
+
+#%%
+
+ds = load_from_disk(dm.disk_save_path)
+
+#%%
+
+ds["train"][0]
+
+#%%
+ds["train"][1]
+#%%
+
+ds
+
+#%%
+
+dm.disk_save_path
+#%%
+
+# Alternatively, we can create an instance and print its __dict__
+birdset_dm = BirdSetDataModule()
+print(birdset_dm.__dict__.keys())
+
+
+#%%
+
+from birdset.datamodule.components.transforms import BirdSetTransformsWrapper
+
+#%%
+
+BirdSetTransformsWrapper(
+
+)
+
+#%%
+
+from birdset.datamodule.birdset_datamodule import BirdSetDataModule
+from birdset.configs.datamodule_configs import DatasetConfig, LoaderConfig, LoadersConfig
+
+#%%
+LoadersConfig()
+#%%
+
+dm = BirdSetDataModule(
+    dataset= DatasetConfig(
+        data_dir="/home/lrauch/projects/birdMAE/data/HSN", # specify your data directory!
+        hf_path='DBD-research-group/BirdSet',
+        hf_name='HSN',
+        n_workers=3,
+        val_split=0.2,
+        task="multilabel",
+        classlimit=500, #limit of samples per class 
+        eventlimit=5, #limit of events that are extracted for each sample
+        sampling_rate=32000,
+    ),
+    loaders=LoadersConfig(), # only utilized in setup
+    transforms=BirdSetTransformsWrapper() # set_transform after .setup
+)
+
+#%%
+dm.prepare_data()
+#%%
+
+dm.prepare_data()
+
+#%%
+
+dataset_config = DatasetConfig(
+    data_dir='data_birdset/HSN', # specify your data directory!
+    hf_path='DBD-research-group/BirdSet',
+    hf_name='HSN',
+    n_classes=21,
+    n_workers=3,
+    val_split=0.2,
+    task="multilabel", # one-hot-encode classes
+    classlimit=500, #limit of samples per class 
+    eventlimit=5, #limit of events that are extracted for each sample
+    sampling_rate=32000,
+)
+
+#%%
+
+loaders_config = LoadersConfig(
+    train = LoaderConfig(
+        batch_size=32,
+        shuffle=True,
+        num_workers=1, 
+        pin_memory=True,
+    ),
+    valid = LoaderConfig(
+        batch_size=64
+        shuffle=False,
+    ),
+    test = LoaderConfig(
+        batch_size=64,
+        shuffle=False
+    )
+)
+
+#%%
+from birdset.datamodule.components.transforms import BirdSetTransformsWrapper
+from birdset.datamodule.components.event_decoding import EventDecoding
+from birdset.datamodule.components.feature_extraction import DefaultFeatureExtractor
+from birdset.datamodule.components.transforms import PreprocessingConfig
+from birdset.datamodule.components.augmentations import NoCallMixer, PowerToDB
+from birdset.datamodule.components.resize import Resizer
+import torch_audiomentations
+from torchaudio.transforms import Spectrogram, MelScale
+import torchvision
+
+
+wrapper = BirdSetTransformsWrapper(
+    task="multilabel",
+    sampling_rate=32_000,
+    model_type="vision",
+    spectrogram_augmentations=[],
+    waveform_augmentations=[],
+    decoding=EventDecoding(
+        min_len=0,
+        max_len=5,
+        sampling_rate=32_000
+    ),
+    feature_extractor=DefaultFeatureExtractor(
+        feature_size=1,
+        padding_value=0.0,
+        return_attention_mask=False,
+    ),
+    max_length=5,
+    nocall_sampler=None,
+    preprocessing=PreprocessingConfig(
+        spectrogram_conversion=Spectrogram(
+            n_fft=1024,
+            hop_length=320,
+            power=2.0),
+        melscale_conversion=MelScale(
+            n_mels=128,
+            sample_rate=32_000,
+            n_stft=513
+        ),
+        dbscale_conversion=PowerToDB(),
+        resizer=Resizer(
+            db_scale=True, 
+            target_height=128, 
+            target_width=1024),
+        
+        normalize_spectrogram=True,
+        normalize_waveform=None,
+        mean=-4.268,
+        std=-4.569
+    )
+)
+
+#%%
+
+loaders_config
+
+#%%
+
+
+
+
+
+# Instantiate the BirdSetDataModule
+birdset_dm = BirdSetDataModule(
+    dataset= dataset_config,
+    loaders = loaders_config,
+    transforms = wrapper
+)
+
+
+birdset_dm.dataset_config
+
+#%%
+
+birdset_dm.loaders_config
+
+
+birdset_dm.transforms_config
 
 
 
 #%%
-        fbank_features = [
-            fbank(
-                waveform.unsqueeze(0),
-                htk_compat=True,
-                sample_frequency=self.sampling_rate,
-                use_energy=False,
-                window_type='hanning',
-                num_mel_bins=128,
-                dither=0.0,
-                frame_shift=10
-            )
-            for waveform in waveforms
-        ]
-        return torch.stack(fbank_features)
-# %%
+
+from birdset.configs.datamodule_configs import DatasetConfig, LoadersConfig
+from birdset.datamodule.components.transforms import BirdSetTransformsWrapper
+from birdset.datamodule.birdset_datamodule import BirdSetDataModule
+from datasets import load_from_disk
+
+# initiate the data module
+dm = BirdSetDataModule(
+    dataset= DatasetConfig(
+        data_dir="/home/lrauch/projects/birdMAE/data/HSN", # specify your data directory!
+        hf_path='DBD-research-group/BirdSet',
+        hf_name='HSN',
+        n_workers=3,
+        val_split=0.05,
+        task="multilabel",
+        classlimit=500, #limit of samples per class 
+        eventlimit=5, #limit of events that are extracted for each sample
+        sampling_rate=32000,
+    ),
+    loaders=LoadersConfig(), # only utilized in setup
+    transforms=BirdSetTransformsWrapper() # set_transform after .setup
+)
+
+# prepare the data
+dm.prepare_data()
+#%%
+dm.disk_save_path
+#%%
+ds = load_from_disk(dm.disk_save_path)
+#%%
+
+ds["train"][0]
+#%%
+ds["test"][0]
+#%%
+from birdset.datamodule.components.event_decoding import EventDecoding
+
+event_decoder = EventDecoding(
+    min_len=1,
+    max_len=5,
+    sampling_rate=32_000,
+    extension_time=8,
+    extracted_interval=5
+)
+
+#%%
+
+event_decoder(ds["train"][0])
+#%%
+
+ds["train"][1]
+
+
+int(102.656*32_000)
+#%%
+min_len = 1
+max_len = 5
+
+def load_audio(sample):
+    path = sample["filepath"]
+    start = sample["detected_events"][0]
+    end = sample["detected_events"][1]
+
+    file_info = sf.info(path)
+    sr = file_info.samplerate
+
+    if start is not None and end is not None:
+        if end - start < min_len:  
+            end = start + min_len
+        if max_len and end - start > max_len:
+            end = start + max_len
+        start, end = int(start * sr), int(end * sr)
+    if not end:
+        end = int(max_len * sr)
+
+    audio, sr = sf.read(path, start=start, stop=end)
+
+    if audio.ndim != 1:
+        audio = audio.swapaxes(1, 0)
+        audio = librosa.to_mono(audio)
+    if sr != sampling_rate:
+        audio = librosa.resample(audio, orig_sr=sr, target_sr=sampling_rate)
+        sr = sampling_rate
+    return audio, sr
+#%%
+
+audio, _ = load_audio(ds["train"][11])
+
+
+
+
+from IPython.display import Audio as IPythonAudio
+IPythonAudio(audio,
+             rate=32_000)
+
+#%%
+
+def load_audio(sample, min_len, max_len, sampling_rate):
+    path = sample["filepath"]
+    start = sample["detected_events"][0]
+    end = sample["detected_events"][1]
+
+    file_info = sf.info(path)
+    sr = file_info.samplerate
+    total_duration = file_info.duration
+
+    if start is not None and end is not None:
+        event_duration = end - start
+        
+        if event_duration < min_len:
+            # Calculate how much we need to extend on each side
+            extension = (min_len - event_duration) / 2
+            
+            # Try to extend equally on both sides
+            new_start = max(0, start - extension)
+            new_end = min(total_duration, end + extension)
+            
+            # If we couldn't extend fully on one side, try to extend more on the other side
+            if new_start == 0:
+                new_end = min(total_duration, new_end + (start - new_start))
+            elif new_end == total_duration:
+                new_start = max(0, new_start - (new_end - end))
+            
+            start, end = new_start, new_end
+
+        if end - start > max_len:
+            # If longer than max_len, take the first 5 seconds of the event
+            end = min(start + 5, total_duration)
+            if end - start > max_len:
+                end = start + max_len
+
+        start, end = int(start * sr), int(end * sr)
+    else:
+        # If start and end are not provided, load the first max_len seconds
+        start, end = 0, int(min(max_len, total_duration) * sr)
+
+    audio, sr = sf.read(path, start=start, stop=end)
+
+    if audio.ndim != 1:
+        audio = audio.swapaxes(1, 0)
+        audio = librosa.to_mono(audio)
+    if sr != sampling_rate:
+        audio = librosa.resample(audio, orig_sr=sr, target_sr=sampling_rate)
+        sr = sampling_rate
+    return audio, sr
+#%%
+audio, _ = load_audio(ds["test"][11], min_len=5, max_len=5, sampling_rate=32_000)
+from IPython.display import Audio as IPythonAudio
+IPythonAudio(audio, rate=32_000)
+
+#%%
+
+ds["test"][11]
+#%%
+import soundfile as sf
+import librosa 
+
+sampling_rate = 32_000
+audio, sr = sf.read(
+    file=ds["train"][11]["filepath"],
+    start=int(ds["train"][11]["detected_events"][0] * sampling_rate),
+    stop=int(ds["train"][11]["detected_events"][1] * sampling_rate)
+)
+if audio.ndim != 1:
+    audio = audio.swapaxes(1, 0)
+    audio = librosa.to_mono(audio)
+
+#%%
+audio.shape
+
+#%%
+
+audio_.shape
+
+#%%
+
+audio
+#%%
+
+
+def load_audio(sample, min_len, max_len, sampling_rate):
+    path = sample["filepath"]
+    
+    if sample["detected_events"] is not None:
+        start = sample["detected_events"][0]
+        end = sample["detected_events"][1]
+        event_duration = end - start
+        
+        if event_duration < min_len:
+            extension = (min_len - event_duration) / 2
+            
+            # try to extend equally 
+            new_start = max(0, start - extension)
+            new_end = min(total_duration, end + extension)
+            
+            if new_start == 0:
+                new_end = min(total_duration, new_end + (start - new_start))
+            elif new_end == total_duration:
+                new_start = max(0, new_start - (new_end - end))
+            
+            start, end = new_start, new_end
+
+        if end - start > max_len:
+            # if longer than max_len
+            end = min(start + max_len, total_duration)
+            if end - start > max_len:
+                end = start + max_len
+    else:
+        start = sample["start_time"]
+        end = sample["end_time"]
+
+    file_info = sf.info(path)
+    sr = file_info.samplerate
+    total_duration = file_info.duration
+
+    start, end = int(start * sr), int(end * sr)
+    audio, sr = sf.read(path, start=start, stop=end)
+
+    if audio.ndim != 1:
+        audio = audio.swapaxes(1, 0)
+        audio = librosa.to_mono(audio)
+    if sr != sampling_rate:
+        audio = librosa.resample(audio, orig_sr=sr, target_sr=sampling_rate)
+        sr = sampling_rate
+    return audio, sr
+
+
+#%%
+
+audio, _ = load_audio(ds["test"][30], min_len=5, max_len=5, sampling_rate=32_000)
+from IPython.display import Audio as IPythonAudio
+IPythonAudio(audio, rate=32_000)
+
+#%%
+
+   import torch 
+    datamodule.setup("fit")
+    loader = torch.utils.data.DataLoader(dataset=datamodule.train_data,batch_size=50)
+
+    import torch
+    from tqdm import tqdm
+
+    # Initialize variables for calculating mean
+    total_sum = 0.0
+    total_count = 0
+
+    # First pass to calculate the global mean
+    for batch in tqdm(loader):
+        inputs = batch["audio"]  # Assuming the inputs are in this key
+        total_sum += inputs.sum().item()
+        total_count += torch.numel(inputs)  # Get the total number of elements in the batch
+
+# Calculate the global mean
+    global_mean = total_sum / total_count
+    print(f"Global Mean: {global_mean}")
+
+    sum_of_squares = 0.0
+
+# Second pass to calculate the variance
+    for batch in tqdm(loader):
+        inputs = batch["audio"]
+        
+        # Subtract the global mean and square the result, then sum
+        sum_of_squares += ((inputs - global_mean) ** 2).sum().item()
+
+    # Calculate the global variance and standard deviation
+    global_variance = sum_of_squares / total_count
+    global_std = torch.sqrt(torch.tensor(global_variance)).item()
+
+    print(f"Global Std Dev: {global_std}")

@@ -1,0 +1,21 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Python: Finetune HSN",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/finetune.py",
+            "args": [
+                "experiment=finetune_hsn"
+            ],
+            "console": "integratedTerminal",
+            "justMyCode": true,
+            "env": {
+                "PYTHONPATH": "${workspaceFolder}",
+                "HYDRA_FULL_ERROR": "1"
+            },
+            "cwd": "${workspaceFolder}"
+        }
+    ]
+}

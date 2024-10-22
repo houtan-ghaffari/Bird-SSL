@@ -1,4 +1,3 @@
-#%%
 import os 
 import json
 from datetime import datetime
@@ -124,7 +123,7 @@ class HFDataModule(pl.LightningDataModule):
                 )
                 self.train_data = split["train"]
                 self.val_data = split["test"]
-
+            
             else: 
                 self.train_data = dataset
                 self.val_data = None
@@ -218,3 +217,77 @@ class HFDataModule(pl.LightningDataModule):
 #         one_hot_labels.append(one_hot)
 #     batch['labels_one_hot'] = one_hot_labels
 #     return batch
+
+class BirdSetDataModule(HFDataModule):
+    def __init__(
+            self, 
+            dataset_configs: DictConfig, 
+            loader_configs: DictConfig, 
+            transform_configs: DictConfig, 
+            sampling_rate: int
+            ):
+        super().__init__(
+            dataset_configs, 
+            loader_configs, 
+            transform_configs, 
+            sampling_rate)
+        
+        self.train_transform = TrainTransform(
+            transform_params=transform_configs,
+            sampling_rate=sampling_rate,
+            target_length=dataset_configs.target_length,
+            mean=dataset_configs.mean,
+            std=dataset_configs.std,
+            columns = dataset_configs.columns,
+            clip_duration = dataset_configs.clip_duration)
+        
+        self.val_transform = EvalTransform(
+            transform_params=transform_configs,
+            sampling_rate=sampling_rate,
+            target_length=dataset_configs.target_length,
+            mean=dataset_configs.mean,
+            std=dataset_configs.std,
+            columns = dataset_configs.columns,
+            clip_duration = dataset_configs.clip_duration
+        )
+
+        self.test_transform = EvalTransform(
+            transform_params=transform_configs,
+            sampling_rate=sampling_rate,
+            target_length=dataset_configs.target_length,
+            mean=dataset_configs.mean,
+            std=dataset_configs.std,
+            columns = dataset_configs.columns,
+            clip_duration = dataset_configs.clip_duration
+        )
+
+        self.train_loader_configs = loader_configs.train
+        self.val_loader_configs = loader_configs.val
+        self.test_loader_configs = loader_configs.test
+
+    def setup(self, stage:str) -> None: 
+        if stage == "fit" or stage is None: 
+            self.train_data = load_from_disk(f"{self.save_to_disk}/train")
+            self.val_data = load_from_disk(f"{self.save_to_disk}/valid")
+            
+            self.train_data.set_format("numpy", columns=self.columns, output_all_columns=False)
+            #self.train_data = self.train_data.cast_column("audio", Audio(sampling_rate=self.sampling_rate, mono=True, decode=True))
+            self.train_data.set_transform(self.train_transform)
+            #self.train_data = self.train_data.select(range(100))
+
+            if self.val_data:
+                self.val_data.set_format("numpy", columns=self.columns, output_all_columns=False)
+                #self.val_data = self.val_data.cast_column("audio", Audio(sampling_rate=self.sampling_rate, mono=True, decode=True))
+                self.val_data.set_transform(self.val_transform)
+                
+            if self.test_in_val == True: # not nice, only for as
+                self.val_data = load_from_disk(f"{self.save_to_disk}/test")
+                self.val_data.set_format("numpy", columns=self.columns, output_all_columns=False)
+                self.val_data.set_transform(self.val_transform)
+
+        
+        if stage == "test": 
+            self.test_data = load_from_disk(f"{self.save_to_disk}/test")
+
+            self.test_data.set_format("numpy", columns=self.columns, output_all_columns=False)
+            self.test_data.set_transform(self.test_transform)

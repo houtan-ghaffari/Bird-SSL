@@ -2,12 +2,13 @@ import os
 import hydra 
 import torch
 import lightning as L
+import sys
 
 from omegaconf import OmegaConf, DictConfig
 import pyrootutils
 from pathlib import Path 
 
-from datamodule import HFDataModule
+from datamodule import HFDataModule,BirdSetDataModule
 from util.pylogger import get_pylogger
 from util.log_hparams import log_hyperparameters
 from build import instantiate_callbacks, build_model
@@ -32,15 +33,27 @@ def finetune(cfg: DictConfig):
     log.info(f"Seed everything with {cfg.seed}")
     L.seed_everything(cfg.seed)
     
-    datamodule = HFDataModule(
-        dataset_configs=cfg.data.dataset,
-        loader_configs=cfg.data.loaders,
-        transform_configs=cfg.data.transform,
-        sampling_rate=cfg.module.network.sampling_rate
+    if cfg.data.dataset.name == "HSN":
+        datamodule = BirdSetDataModule(
+            dataset_configs=cfg.data.dataset,
+            loader_configs=cfg.data.loaders,
+            transform_configs=cfg.data.transform,
+            sampling_rate=cfg.module.network.sampling_rate
+        )
+    else:
+        datamodule = HFDataModule(
+            dataset_configs=cfg.data.dataset,
+            loader_configs=cfg.data.loaders,
+            transform_configs=cfg.data.transform,
+            sampling_rate=cfg.module.network.sampling_rate
     )
 
-    log.info("Setup logger")
-    logger = hydra.utils.instantiate(cfg.logger)
+    if sys.gettrace():
+         log.info("Debugging mode, no logger")
+         logger = None
+    else:
+        log.info("Setup logger")
+        logger = hydra.utils.instantiate(cfg.logger)
 
     log.info("Setup callbacks")
     callbacks = instantiate_callbacks(cfg["callbacks"])

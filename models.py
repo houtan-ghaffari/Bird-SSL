@@ -628,7 +628,7 @@ class VIT(L.LightningModule, VisionTransformer):
         targets = torch.cat(self.val_targets)
         metric = self.val_metric(preds, targets)
         self.log(f'val_{self.val_metric.__class__.__name__}', metric, on_step=False, on_epoch=True, prog_bar=True)
-        print("val", metric)
+        print("val metric:", metric.detach().cpu().item())
 
         self.val_predictions = []
         self.val_targets = []
@@ -663,6 +663,7 @@ class VIT(L.LightningModule, VisionTransformer):
         #heuristic:
         eff_batch_size = self.trainer.accumulate_grad_batches * self.trainer.num_devices * self.train_batch_size
         self.optimizer_cfg["lr"] = self.optimizer_cfg["lr"] * eff_batch_size / 256
+        print("effective learning rate:", self.optimizer_cfg["lr"], self.layer_decay)
 
         if self.layer_decay:
             params = param_groups_lrd(

@@ -3,6 +3,7 @@ import numpy as np
 from transformers.audio_utils import spectrogram, window_function, mel_filter_bank
 from omegaconf import DictConfig
 import torch 
+from birdset.datamodule.components.event_decoding import EventDecoding
 
 from torchaudio.compliance.kaldi import fbank
 from torchaudio.transforms import FrequencyMasking, TimeMasking
@@ -14,6 +15,12 @@ from transformers import SequenceFeatureExtractor
 from transformers.utils import logging, PaddingStrategy
 import torch 
 import random
+import os
+import glob
+import librosa
+import soundfile as sf
+
+from util.mixup import SpecMixup
 
 logger = logging.get_logger(__name__)
 
@@ -48,15 +55,23 @@ class BaseTransform:
             padding_value=0.0,
             return_attention_mask=False
         )    
-
-        self.mixup = transform_params.mixup
+    
+        self.mixup_fn = None
+        if transform_params.mixup.prob > 0:
+            self.mixup_fn = SpecMixup(
+                alpha=transform_params.mixup.alpha, 
+                prob=transform_params.mixup.prob, 
+                num_mix=transform_params.mixup.num_mix, 
+                full_target=transform_params.mixup.full_target)
+        
         self.freqm = None
         self.timem = None
-
         if transform_params.freqm:
             self.freqm = FrequencyMasking(freq_mask_param=transform_params.freqm)
         if transform_params.timem:
             self.timem = TimeMasking(time_mask_param=transform_params.timem)
+        
+        self.event_decoder = EventDecoding(min_len=5, max_len=5, sampling_rate=self.sampling_rate)
   
     def _init_mel_filters(self):
         mel_filters = mel_filter_bank(**self.mel_filter_params)
@@ -71,7 +86,9 @@ class BaseTransform:
             truncation=True,
             return_attention_mask=False
         )
+        # add std
         waveform_batch["input_values"] = waveform_batch["input_values"] - waveform_batch["input_values"].mean(axis=1, keepdims=True)
+        #waveform_batch["input_values"] = (waveform_batch["input_values"] - waveform_batch["input_values"].mean(axis=1, keepdims=True)) / (waveform_batch["input_values"].std(axis=1, keepdims=True) + 1e-8)
         return waveform_batch 
     
     def _compute_fbank_features(self, waveforms):
@@ -102,7 +119,11 @@ class BaseTransform:
         return fbank_features
     
     def __call__(self, batch):
-        waveform_batch = [audio["array"] for audio in batch["audio"]]
+        try:
+            waveform_batch = [audio["array"] for audio in batch["audio"]]
+        except:
+            waveform_batch = self.event_decoder(batch)
+            waveform_batch = [audio["array"] for audio in batch["audio"]]
         waveform_batch = self._process_waveforms(waveform_batch)
         fbank_features = self._compute_fbank_features(waveform_batch["input_values"])
         fbank_features = self._pad_and_normalize(fbank_features)
@@ -113,6 +134,9 @@ class BaseTransform:
         }
 
 class TrainTransform(BaseTransform):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.event_decoder = EventDecoding(min_len=5, max_len=5, sampling_rate=self.sampling_rate)
     
     def cyclic_rolling_start(self, waveforms):
         batch_size, waveform_length = waveforms.shape
@@ -126,15 +150,23 @@ class TrainTransform(BaseTransform):
         return waveforms  
     
     def __call__(self, batch):
-        waveform_batch = [audio["array"] for audio in batch["audio"]]
+        try:
+            waveform_batch = [audio["array"] for audio in batch["audio"]]
+        except:
+            waveform_batch = self.event_decoder(batch)
+            waveform_batch = [audio["array"] for audio in batch["audio"]]
         waveform_batch = self._process_waveforms(waveform_batch)
         waveform_batch["input_values"] = self.cyclic_rolling_start(waveform_batch["input_values"])
 
-        # mixup
-        if self.mixup: 
-            waveform_batch["input_values"], batch[self.columns[1]] = self._mixup(waveform_batch, batch[self.columns[1]])
-
+        # if self.mixup: 
+        #     waveform_batch["input_values"], batch[self.columns[1]] = self.mix_fn(waveform_batch["input_values"], batch[self.columns[1]])
+        #waveform_batch["input_values"], batch[self.columns[1]] = self._mixup(waveform_batch, batch[self.columns[1]])
+        
         fbank_features = self._compute_fbank_features(waveform_batch["input_values"]) #shape for as: batch, 998, 128
+
+        if self.mixup_fn: #spec mxup
+            fbank_features, batch[self.columns[1]] = self.mixup_fn(fbank_features, batch[self.columns[1]])
+
         fbank_features = self._pad_and_normalize(fbank_features) # shape: batch, time(1024), freq(128)
         
         #fbank_features = fbank_features.transpose(0,1).unsqueeze(0)
@@ -147,8 +179,7 @@ class TrainTransform(BaseTransform):
             fbank_features = fbank_features.permute(0, 2, 1)  # batch, 1, 1024, 128
 
         fbank_features = (fbank_features - self.mean) / (self.std * 2) # need: batch, 1024, 128
-       
-       
+
         return {
             "audio": fbank_features.unsqueeze(1), # batch, 1, 1024, 128
             "label": torch.Tensor(batch[self.columns[1]]),
@@ -174,6 +205,55 @@ class TrainTransform(BaseTransform):
         waveform_batch["input_values"] = torch.stack(mixed_audio)
         return torch.stack(mixed_audio), mixed_labels
 
+
+    def _load_audio_birdset(sample, min_len=5, max_len=5, sampling_rate=32_000):
+        path = sample["filepath"]
+        start = sample["detected_events"][0]
+        end = sample["detected_events"][1]
+
+        file_info = sf.info(path)
+        sr = file_info.samplerate
+        total_duration = file_info.duration
+
+        if start is not None and end is not None:
+            event_duration = end - start
+            
+            if event_duration < min_len:
+                # Calculate how much we need to extend on each side
+                extension = (min_len - event_duration) / 2
+                
+                # Try to extend equally on both sides
+                new_start = max(0, start - extension)
+                new_end = min(total_duration, end + extension)
+                
+                # If we couldn't extend fully on one side, try to extend more on the other side
+                if new_start == 0:
+                    new_end = min(total_duration, new_end + (start - new_start))
+                elif new_end == total_duration:
+                    new_start = max(0, new_start - (new_end - end))
+                
+                start, end = new_start, new_end
+
+            if end - start > max_len:
+                # If longer than max_len, take the first 5 seconds of the event
+                end = min(start + 5, total_duration)
+                if end - start > max_len:
+                    end = start + max_len
+
+            start, end = int(start * sr), int(end * sr)
+        else:
+            # If start and end are not provided, load the first max_len seconds
+            start, end = 0, int(min(max_len, total_duration) * sr)
+
+        audio, sr = sf.read(path, start=start, stop=end)
+
+        if audio.ndim != 1:
+            audio = audio.swapaxes(1, 0)
+            audio = librosa.to_mono(audio)
+        if sr != sampling_rate:
+            audio = librosa.resample(audio, orig_sr=sr, target_sr=sampling_rate)
+            sr = sampling_rate
+        return audio, sr
 
 class EvalTransform(BaseTransform):
     pass
@@ -241,3 +321,78 @@ class DefaultFeatureExtractor(SequenceFeatureExtractor):
 
 
         return padded_inputs
+
+
+
+
+class NoCallMixer:
+    """
+    A class used to mix no-call samples into the dataset.
+
+    Attributes
+    ----------
+    _target_ : str
+        Specifies the no-call sampler component in the pipeline.
+    directory : str
+        The directory containing the no-call data. The directory should contain audio files in a format that can be read by torchaudio (e.g. .wav).
+    p : float
+        The probability of a sample being replaced with a no-call sample. This parameter allows you to control the frequency of no-call samples in your dataset.
+    sampling_rate : int
+        The sampling rate at which the audio data should be processed. This parameter should align with the rest of your dataset and model configuration.
+    length : int
+        The length of the audio samples. This parameter should align with the rest of your dataset and model configuration.
+    """
+
+    def __init__(self, directory, p, sampling_rate, length=5):
+        self.p = p
+        self.sampling_rate = sampling_rate
+        self.length = length
+
+        self.paths = self.get_all_file_paths(directory)
+
+    def get_all_file_paths(self, directory):
+        pattern = os.path.join(directory, "**", "*")
+        file_paths = [
+            path for path in glob.glob(pattern, recursive=True) if os.path.isfile(path)
+        ]
+
+        absolute_file_paths = [os.path.abspath(path) for path in file_paths]
+
+        return absolute_file_paths
+
+    def __call__(self, input_values, labels):
+        b, c = labels.shape
+        for idx in range(len(input_values)):
+            if random.random() < self.p:
+                selected_path = random.choice(self.paths)
+                info = sf.info(selected_path)
+                sr = info.samplerate
+                duration = info.duration
+
+                if duration >= self.length:
+                    latest_start = int(duration - self.length) * sr
+
+                    start_frame = int(random.randint(0, latest_start))
+                    end_frame = start_frame + self.length * sr
+                    audio, sr = sf.read(
+                        selected_path, start=start_frame, stop=end_frame
+                    )
+
+                else:
+                    audio, sr = sf.read(selected_path)
+
+                if sr != self.sampling_rate:
+                    audio = librosa.resample(
+                        audio, orig_sr=sr, target_sr=self.sampling_rate
+                    )
+                    sr = self.sampling_rate
+
+                audio = torch.tensor(audio)
+
+                if audio.numel() < input_values[idx].numel():
+                    padding = input_values[idx].numel() - audio.numel()
+                    audio = torch.nn.functional.pad(audio, (0, padding))
+
+                input_values[idx] = audio
+                labels[idx] = torch.zeros(c)
+        return input_values, labels

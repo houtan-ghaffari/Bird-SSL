@@ -19,4 +19,5 @@ deterministic: False
 
 gradient_clip_val: null
 accumulate_grad_batches: 1
-precision: 16
+#precision: 16
+precision: bf16

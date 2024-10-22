@@ -7,15 +7,20 @@ fbank:
   dither: 0.0
   frame_shift: 10 
 
-mixup: 0.5
-# freqm: 48
-# timem: 192
-freqm: null
-timem: null
-# mask2d: true
-# mask_t_prob: 0.2
-# mask_f_prob: 0.2
+mixup:
+  alpha: 10.
+  prob: 0.5
+  num_mix: 2
+  full_target: false
+  
+freqm: 48
+timem: 192
+# freqm: null
+# timem: null
+mask2d: true
+mask_t_prob: 0.2
+mask_f_prob: 0.2
 
-mask2d: false
-mask_t_prob: 0.0
-mask_f_prob: 0.0
+# mask2d: false
+# mask_t_prob: 0.0
+# mask_f_prob: 0.0
