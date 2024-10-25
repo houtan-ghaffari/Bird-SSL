@@ -20,4 +20,18 @@ task_name: "finetune_asb"
 train: true
 test: true
 
+data:
+  loaders:
+    train: 
+      num_workers: 24
+      batch_size: 64
+      shuffle: true
+logger:
+  experiment_name: amae_rep
 
+module:
+  optimizer:
+    target:
+      lr: 1e-3
+    extras:
+      layer_decay: null

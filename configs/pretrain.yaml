@@ -2,16 +2,21 @@
 defaults:
   - _self_
   - callbacks: default
-  - data/dataset: esc50
-  - data/loaders: default
-  - data/transform: melscale
+  - data/dataset: audioset_balanced
+  - data/loaders: audioset_balanced
+  - data/transform: pretrain_melbank_asb
+  - logger: mlflow
   - hydra: workstation
   - module/network: amae_vitbase_16
   - module/optimizer: adamw
   - module/scheduler: cosine
+  - module/loss: mean_squared_error
   - paths: workstation
   - trainer: single_gpu
+  - module/metric: null
+  - experiment: null
+
   
 seed: 42
 start_time: ${now:%Y-%m-%d_%H%M%S}
-task_name: "ssl"
+task_name: "pretrain_asb"

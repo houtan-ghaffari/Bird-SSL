@@ -1,4 +1,3 @@
-#%%
 import lightning as L
 import torch
 import torch.nn as nn
@@ -8,6 +7,7 @@ from timm.models.vision_transformer import PatchEmbed
 from timm.models.vision_transformer import Block
 from timm.models.swin_transformer import SwinTransformerBlock
 from timm.models.vision_transformer import VisionTransformer
+from timm.optim.optim_factory import param_groups_weight_decay
 from timm.models.layers import trunc_normal_
 from functools import partial
 from util.pos_embed import get_2d_sincos_pos_embed, get_2d_sincos_pos_embed_flexible
@@ -183,7 +183,8 @@ class AudioMAE(L.LightningModule):
                  cfg_encoder,
                  cfg_decoder,
                  optimizer,
-                 scheduler
+                 scheduler,
+                 loss
     ):
         super().__init__()
         self.save_hyperparameters()
@@ -217,8 +218,11 @@ class AudioMAE(L.LightningModule):
         )
 
         self.norm_pix_loss = norm_pix_loss
-        self.optimizer_cfg = optimizer
+        self.optimizer_cfg = optimizer.target
         self.scheduler_cfg = scheduler 
+        self.loss = hydra.utils.instantiate(loss)
+        self.train_batch_size = optimizer.extras.train_batch_size
+        self.layer_decay = optimizer.extras.layer_decay
 
         self.initialize_weights()
 
@@ -284,6 +288,7 @@ class AudioMAE(L.LightningModule):
             var = target.var(dim=-1, keepdim=True)
             target = (target - mean) / (var + 1.e-6)**.5
 
+        #loss = self.loss(pred, target)
         loss = (pred - target) ** 2
         loss = loss.mean(dim=-1)  # [N, L], mean loss per patch
 
@@ -307,13 +312,25 @@ class AudioMAE(L.LightningModule):
         pass
 
     def configure_optimizers(self):
-        optimizer = hydra.utils.instantiate(
-            self.optimizer_cfg, 
-            params=self.parameters())
+        eff_batch_size = self.trainer.accumulate_grad_batches * self.trainer.num_devices * self.train_batch_size
+        print("base learning rate on 256 was:", self.optimizer_cfg["lr"])
+        self.optimizer_cfg["lr"] = self.optimizer_cfg["lr"] * eff_batch_size / 256
+        print("effective learning rate now:", self.optimizer_cfg["lr"], self.layer_decay)
+        
+        param_groups = param_groups_weight_decay(
+            self,
+            self.optimizer_cfg["weight_decay"],
+            no_weight_decay_list=("bias", "bn", "ln", "gn", "norm")
+        )
+
+        optimizer = torch.optim.AdamW(
+            param_groups, 
+            lr=self.optimizer_cfg["lr"], 
+            betas=self.optimizer_cfg["betas"])
     
         if self.scheduler_cfg: 
             num_training_steps = self.trainer.estimated_stepping_batches
-            warmup_ratio = 0.067 # hard coded
+            warmup_ratio = 0.09375 # hard coded
             num_warmup_steps = num_training_steps * warmup_ratio
 
             scheduler = get_cosine_schedule_with_warmup(
@@ -332,10 +349,10 @@ class AudioMAE(L.LightningModule):
         return {"optimizer": optimizer}
 
 
-    def on_train_batch_start(self, batch, batch_idx, unused=0):
-        # Log the learning rate
-        lr = self.optimizers().param_groups[0]['lr']
-        self.log('learning_rate', lr, prog_bar=True)
+    # def on_train_batch_start(self, batch, batch_idx, unused=0):
+    #     # Log the learning rate
+    #     lr = self.optimizers().param_groups[0]['lr']
+    #     self.log('learning_rate', lr, prog_bar=True)
 
 
 class AudioMAE_FT(L.LightningModule):
@@ -719,15 +736,34 @@ class VIT(L.LightningModule, VisionTransformer):
 
             self.patch_embed = PatchEmbed(img_size, 16, 1, 768)
             self.pos_embed = nn.Parameter(torch.zeros(1, num_patches + 1, 768), requires_grad=False) #to load pretrained pos embed
-            
-            pretrained_state_dict = torch.load(pretrained_weights_path, map_location="cpu")["model"]
+            try:
+                pre_state_dict = torch.load(pretrained_weights_path, map_location="cpu")["model"]
+            except:
+                pre_state_dict = torch.load(pretrained_weights_path, map_location="cpu")["state_dict"]
+
+            pretrained_state_dict = {}
+
+            for key, value in pre_state_dict.items():
+                if key.startswith("decoder."):
+                    # Skip any key that starts with "decoder."
+                    continue
+                elif key.startswith("encoder."):
+                    # Remove the "encoder." prefix
+                    new_key = key[len("encoder."):]
+                else:
+                    # Use the original key if no prefix
+                    new_key = key
+                
+                # Add the modified key-value pair to the new state dict
+                pretrained_state_dict[new_key] = value
+
 
             for k in ['head.weight', 'head.bias']:
                 if k in pretrained_state_dict and pretrained_state_dict[k].shape != self.state_dict[k].shape:
                     print(f"Removing key {k} from pretrained checkpoint")
                     del pretrained_state_dict[k]
             
-            self.load_state_dict(pretrained_state_dict, strict=False)
+            info = self.load_state_dict(pretrained_state_dict, strict=False)
 
             patch_hw = (img_size[1] // 16, img_size[0] // 16) # 16=patchsize
             pos_embed = get_2d_sincos_pos_embed_flexible(self.pos_embed.size(-1), patch_hw, cls_token=True) # not trained, overwrite from sincos
@@ -740,7 +776,27 @@ class VIT(L.LightningModule, VisionTransformer):
             self.pos_embed = nn.Parameter(torch.zeros(1, num_patches + 1, self.embed_dim), requires_grad=False)  # fixed sin-cos embedding
 
             checkpoint = torch.load(pretrained_weights_path, map_location="cpu")
-            pretrained_state_dict = checkpoint["model"]
+            try:
+                pre_state_dict = checkpoint["model"]
+            except:
+                pre_state_dict = checkpoint["state_dict"]
+
+            pretrained_state_dict = {}
+
+            for key, value in pre_state_dict.items():
+                if key.startswith("decoder."):
+                    # Skip any key that starts with "decoder."
+                    continue
+                elif key.startswith("encoder."):
+                    # Remove the "encoder." prefix
+                    new_key = key[len("encoder."):]
+                else:
+                    # Use the original key if no prefix
+                    new_key = key
+                
+                # Add the modified key-value pair to the new state dict
+                pretrained_state_dict[new_key] = value
+
             state_dict = self.state_dict()
 
             for k in ["head.weight", "head.bias"]:

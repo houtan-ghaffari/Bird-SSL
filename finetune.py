@@ -8,7 +8,7 @@ from omegaconf import OmegaConf, DictConfig
 import pyrootutils
 from pathlib import Path 
 
-from datamodule import HFDataModule,BirdSetDataModule
+from datamodule import HFDataModule, BirdSetDataModule
 from util.pylogger import get_pylogger
 from util.log_hparams import log_hyperparameters
 from build import instantiate_callbacks, build_model
@@ -32,6 +32,7 @@ _HYDRA_PARAMS = {
 def finetune(cfg: DictConfig):
     log.info(f"Seed everything with {cfg.seed}")
     L.seed_everything(cfg.seed)
+    torch.set_num_threads(12)
     
     if cfg.data.dataset.name == "HSN":
         datamodule = BirdSetDataModule(
@@ -67,7 +68,7 @@ def finetune(cfg: DictConfig):
     pretrained_weights_path = cfg.module.network.pretrained_weights_path
     #pretrained_weights_path = None
 
-    if pretrained_weights_path:
+    if pretrained_weights_path: 
         log.info(f"Load pretrained weights from {pretrained_weights_path}")
         model.load_pretrained_weights(pretrained_weights_path, cfg.data.dataset.name)
     

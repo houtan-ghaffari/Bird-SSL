@@ -1,13 +1,16 @@
 #%%
+from datasets import load_dataset
+#%%
+#%%
 import torch 
-from datasets import load_dataset, load_from_disk
+from datasets import load_dataset, load_from_disk, save_to_disk
 import os
 import torchaudio
 from datasets import Audio
 import numpy as np 
 from transformers import AutoFeatureExtractor
 from torchaudio.compliance.kaldi import fbank
-
+#%%
 dataset = load_dataset(
     "ashraq/esc50", 
     cache_dir="./data",
@@ -1126,3 +1129,140 @@ IPythonAudio(audio, rate=32_000)
     global_std = torch.sqrt(torch.tensor(global_variance)).item()
 
     print(f"Global Std Dev: {global_std}")
+
+
+#%%%
+
+from datasets import load_dataset, Audio, save_to_disk
+#%%
+import datasets 
+#%%
+!pip install datasets
+#%%
+datasets.save_to_disk()
+#%%
+
+dataset = load_dataset(
+    "ashraq/esc50", 
+    cache_dir="./data/esc50",
+    split="train",
+)
+#840MB
+#%%
+dataset
+#%%
+from transforms import DefaultFeatureExtractor
+feature_extractor = DefaultFeatureExtractor(
+    feature_size=1,
+    sampling_rate=32_000,
+    padding_value=0.0,
+    return_attention_mask=False
+)    
+
+
+#%%
+def preprocess_function(examples):
+    audio_arrays = [x["array"] for x in examples["audio"]]
+    inputs = feature_extractor(
+        audio_arrays)
+    return inputs
+
+mapped_dataset = dataset.map(
+    preprocess_function, 
+    remove_columns=dataset.column_names,
+    batched=True)
+
+#%%
+mapped_dataset.save_to_disk("./data/esc50_mapped")
+
+
+#%%
+from datasets import load_from_disk
+dataset = load_from_disk("./data/esc50_mapped")
+#%%
+
+dataset["input_values"][0].shape
+#%%
+
+mapped_dataset["input_values"][0].shape
+
+#%%
+
+from datasets import save_to_disk
+#%%
+mapped_dataset._get_cache_file_path("input_values")
+
+#%%
+
+dataset["audio"][0]
+#%%
+
+dataset_size_bytes  = dataset.dataset_size
+dataset_size_mb = dataset_size_bytes / (1024 ** 2)
+dataset_size_gb = dataset_size_bytes / (1024 ** 3)
+
+print(f"Dataset size: {dataset_size_bytes} bytes")
+print(f"Dataset size: {dataset_size_mb:.2f} MB")
+print(f"Dataset size: {dataset_size_gb:.2f} GB")
+
+
+#%%%
+
+dataset = dataset.cast_column("audio", Audio(sampling_rate=32_000))
+#%%
+
+def prepare_dataset(batch):
+    audio = batch['audio']
+    batch["input_values"] = audio["array"]
+
+    batch["labels"] = batch["target"]
+    return batch
+
+
+# Apply the mapping function to the dataset
+mapped_dataset = dataset.map(
+    prepare_dataset, 
+    remove_columns=dataset.column_names,
+    num_proc=2)
+#%%
+
+len(mapped_dataset["input_values"][1])
+
+#%%%
+mapped_dataset["audio"][0]["array"].shape
+#%%
+#%%
+a = mapped_dataset["audio_array"][0]
+#%%
+
+len(mapped_dataset["audio_array"][0])
+
+
+#%%
+
+dataset["audio"][0]
+#%%
+
+
+dataset._get_cache_file_path("audio")
+#842 MB
+
+#%%
+
+dataset._get_cache_file_path("audio")
+
+
+#%%%
+
+dataset = load_dataset(
+    "agkphysics/AudioSet",
+      cache_dir="/home/lrauch/projects/birdMAE/data/audioset_balanced")
+#%%
+
+dataset_size_bytes  = dataset["train"].dataset_size
+dataset_size_mb = dataset_size_bytes / (1024 ** 2)
+dataset_size_gb = dataset_size_bytes / (1024 ** 3)
+
+print(f"Dataset size: {dataset_size_bytes} bytes")
+print(f"Dataset size: {dataset_size_mb:.2f} MB")
+print(f"Dataset size: {dataset_size_gb:.2f} GB")

@@ -27,7 +27,9 @@ def build_model(cfg_module: DictConfig):
             cfg_encoder=cfg_module.network.encoder,
             cfg_decoder=cfg_module.network.decoder,
             optimizer=cfg_module.optimizer,
-            scheduler=cfg_module.scheduler
+            scheduler=cfg_module.scheduler,
+            loss=cfg_module.loss,
+            
         )
     elif cfg_module.network.name == "VIT":
         module = VIT(

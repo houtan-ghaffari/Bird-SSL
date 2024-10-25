@@ -13,6 +13,4 @@ target_length: 1024 #dopplung in melscale! change!
 mean: -4.2677393
 std: 4.5689974
 save_to_disk: ${paths.dataset_dir}/saved_to_disk
-test_in_val: true
-
-
+test_in_val: false

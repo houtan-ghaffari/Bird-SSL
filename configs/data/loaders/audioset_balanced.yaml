@@ -3,6 +3,7 @@ train:
   batch_size: 32
   shuffle: true
   pin_memory: false
+  drop_last: true
 
 val:
   num_workers: 24
