@@ -34,4 +34,4 @@ module:
     target:
       lr: 1e-3
     extras:
-      layer_decay: null
+      layer_decay: 0.75

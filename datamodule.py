@@ -11,7 +11,7 @@ from lightning.pytorch.utilities.types import EVAL_DATALOADERS, TRAIN_DATALOADER
 import numpy as np 
 
 from configs import Config, DataModuleConfig, ModuleConfig
-from transforms import TrainTransform, EvalTransform
+from transforms import TrainTransform, EvalTransform, ImageTrainTransform, ImageEvalTransform
 
 class HFDataModule(pl.LightningDataModule):
     def __init__(
@@ -36,6 +36,37 @@ class HFDataModule(pl.LightningDataModule):
         self.sampling_rate = sampling_rate
         self.save_to_disk = dataset_configs.save_to_disk
         self.test_in_val = dataset_configs.test_in_val
+        self.saved_images = dataset_configs.saved_images
+
+        self.train_image_transform = ImageTrainTransform(
+            transform_params=transform_configs,
+            sampling_rate=sampling_rate,
+            target_length=dataset_configs.target_length,
+            mean=dataset_configs.mean,
+            std=dataset_configs.std,
+            columns = dataset_configs.columns,
+            clip_duration = dataset_configs.clip_duration
+        )
+
+        self.val_image_transform = ImageEvalTransform(
+            transform_params=transform_configs,
+            sampling_rate=sampling_rate,
+            target_length=dataset_configs.target_length,
+            mean=dataset_configs.mean,
+            std=dataset_configs.std,
+            columns = dataset_configs.columns,
+            clip_duration = dataset_configs.clip_duration
+        )
+
+        self.test_image_transform = ImageEvalTransform(
+            transform_params=transform_configs,
+            sampling_rate=sampling_rate,
+            target_length=dataset_configs.target_length,
+            mean=dataset_configs.mean,
+            std=dataset_configs.std,
+            columns = dataset_configs.columns,
+            clip_duration = dataset_configs.clip_duration
+        )
 
         self.train_transform = TrainTransform(
             transform_params=transform_configs,
@@ -93,60 +124,69 @@ class HFDataModule(pl.LightningDataModule):
     
     def setup(self, stage:str) -> None: 
         if stage == "fit" or stage is None: 
-            if self.save_to_disk: 
-                dataset = load_from_disk(f"{self.save_to_disk}/train")
-            else: 
-                dataset = load_dataset(
-                    self.hf_path, self.hf_name, split=self.train_split, cache_dir=self.data_dir
-                )
+            if self.saved_images:
+                self.train_data = load_from_disk(f"{self.saved_images}/train")
+                self.train_data.set_transform(self.train_image_transform)
 
-                if "AudioSet" in self.hf_path:
-                    with open("/home/lrauch/projects/birdMAE/data/audioset_ontology_custom527.json", "r") as f:
-                        ontology = json.load(f)
-                    num_classes = len(ontology)
-                    label_names = list(ontology.keys())
-                    class_label = Sequence(ClassLabel(num_classes=num_classes, names=label_names))
-                    dataset = dataset.cast_column("human_labels", class_label)
-                    dataset = dataset.map(self._one_hot_encode, batched=True, batch_size=1000, load_from_cache_file=True)
+                self.val_data = load_from_disk(f"{self.saved_images}/test")
+                self.val_data.set_transform(self.val_image_transform)
+                
 
-                    rows_to_remove = [15_759,17_532] #corrupted
-                    all_indices = list(range(len(dataset)))
-                    indices_to_keep = [i for i in all_indices if i not in rows_to_remove]
-                    dataset = dataset.select(indices_to_keep)
-
-
-            if self.test_size:
-                split = dataset.train_test_split(
-                    self.test_size,
-                    shuffle=True,
-                    seed=42
-                )
-                self.train_data = split["train"]
-                self.val_data = split["test"]
-            
-            else: 
-                self.train_data = dataset
-                self.val_data = None
-
-            self.train_data.set_format("numpy", columns=self.columns, output_all_columns=False)
-            self.train_data = self.train_data.cast_column("audio", Audio(sampling_rate=self.sampling_rate, mono=True, decode=True))
-            self.train_data.set_transform(self.train_transform)
-            #self.train_data = self.train_data.select(range(100))
-
-            if self.val_data:
-                self.val_data.set_format("numpy", columns=self.columns, output_all_columns=False)
-                self.val_data = self.val_data.cast_column("audio", Audio(sampling_rate=self.sampling_rate, mono=True, decode=True))
-                self.val_data.set_transform(self.val_transform)
-            
-            if self.test_in_val == True: # not nice, only for as
+            else:
                 if self.save_to_disk: 
-                    self.val_data = load_from_disk(f"{self.save_to_disk}/test")
+                    dataset = load_from_disk(f"{self.save_to_disk}/train")
                 else: 
-                    self.val_data = load_dataset(self.hf_path, self.hf_name, split=self.test_split, cache_dir=self.data_dir)
+                    dataset = load_dataset(
+                        self.hf_path, self.hf_name, split=self.train_split, cache_dir=self.data_dir
+                    )
 
-                self.val_data.set_format("numpy", columns=self.columns, output_all_columns=False)
-                self.val_data = self.val_data.cast_column("audio", Audio(sampling_rate=self.sampling_rate, mono=True, decode=True))
-                self.val_data.set_transform(self.val_transform)
+                    if "AudioSet" in self.hf_path:
+                        with open("/home/lrauch/projects/birdMAE/data/audioset_ontology_custom527.json", "r") as f:
+                            ontology = json.load(f)
+                        num_classes = len(ontology)
+                        label_names = list(ontology.keys())
+                        class_label = Sequence(ClassLabel(num_classes=num_classes, names=label_names))
+                        dataset = dataset.cast_column("human_labels", class_label)
+                        dataset = dataset.map(self._one_hot_encode, batched=True, batch_size=1000, load_from_cache_file=True)
+
+                        rows_to_remove = [15_759,17_532] #corrupted
+                        all_indices = list(range(len(dataset)))
+                        indices_to_keep = [i for i in all_indices if i not in rows_to_remove]
+                        dataset = dataset.select(indices_to_keep)
+
+
+                if self.test_size:
+                    split = dataset.train_test_split(
+                        self.test_size,
+                        shuffle=True,
+                        seed=42
+                    )
+                    self.train_data = split["train"]
+                    self.val_data = split["test"]
+                
+                else: 
+                    self.train_data = dataset
+                    self.val_data = None
+
+                self.train_data.set_format("numpy", columns=self.columns, output_all_columns=False)
+                self.train_data = self.train_data.cast_column("audio", Audio(sampling_rate=self.sampling_rate, mono=True, decode=True))
+                self.train_data.set_transform(self.train_transform)
+                #self.train_data = self.train_data.select(range(100))
+
+                if self.val_data:
+                    self.val_data.set_format("numpy", columns=self.columns, output_all_columns=False)
+                    self.val_data = self.val_data.cast_column("audio", Audio(sampling_rate=self.sampling_rate, mono=True, decode=True))
+                    self.val_data.set_transform(self.val_transform)
+                
+                if self.test_in_val == True: # not nice, only for as
+                    if self.save_to_disk: 
+                        self.val_data = load_from_disk(f"{self.save_to_disk}/test")
+                    else: 
+                        self.val_data = load_dataset(self.hf_path, self.hf_name, split=self.test_split, cache_dir=self.data_dir)
+
+                    self.val_data.set_format("numpy", columns=self.columns, output_all_columns=False)
+                    self.val_data = self.val_data.cast_column("audio", Audio(sampling_rate=self.sampling_rate, mono=True, decode=True))
+                    self.val_data.set_transform(self.val_transform)
 
         
         if stage == "test": 

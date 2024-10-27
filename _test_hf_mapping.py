@@ -144,11 +144,127 @@ def prepare_dataset(batch):
     # del batch['start_time']
     # del batch['end_time']
     batch['input_values'] = imgs
-    batch["label"] = batch["target"]
+    batch["label"] = batch["human_labels"]
 
     return batch
 
 #%%
+
+from datasets import Audio, load_dataset
+import json
+from datasets import Sequence, ClassLabel
+dataset = load_dataset(
+    "agkphysics/AudioSet", 
+    cache_dir="/home/lrauch/projects/birdMAE/data/audioset_balanced")
+
+dataset = dataset.cast_column("audio", Audio(sampling_rate=32_000))
+def _one_hot_encode(batch):
+    label_list = [y for y in batch["human_labels"]]
+    
+    # Use numpy instead of torch for caching
+    class_one_hot_matrix = np.zeros((len(label_list), 527), dtype=np.float32)
+    
+    for class_idx, indices in enumerate(label_list):
+        class_one_hot_matrix[class_idx, indices] = 1.0
+    
+    return {"human_labels": class_one_hot_matrix}
+with open("/home/lrauch/projects/birdMAE/data/audioset_ontology_custom527.json", "r") as f:
+    ontology = json.load(f)
+num_classes = len(ontology)
+label_names = list(ontology.keys())
+class_label = Sequence(ClassLabel(num_classes=num_classes, names=label_names))
+dataset = dataset.cast_column("human_labels", class_label)
+dataset = dataset.map(_one_hot_encode, batched=True, batch_size=1000, load_from_cache_file=True)
+
+rows_to_remove = [15_759,17_532] #corrupted
+all_indices = list(range(len(dataset["train"])))
+indices_to_keep = [i for i in all_indices if i not in rows_to_remove]
+dataset["train"] = dataset["train"].select(indices_to_keep)
+
+rows_to_remove = [6_182] #corrupted
+all_indices = list(range(len(dataset["test"])))
+indices_to_keep = [i for i in all_indices if i not in rows_to_remove]
+dataset["test"] = dataset["test"].select(indices_to_keep)
+
+#%%
+
+dataset["train"][0]["human_labels"]
+#%%
+
+dataset
+
+#%%
+
+from tqdm import tqdm 
+for i in tqdm(range(len(dataset["train"]))):
+    dataset["train"][i]["audio"]["array"]
+#%%
+
+
+dataset= dataset.map(
+    prepare_dataset,
+    remove_columns=dataset["train"].column_names,
+    batched=True,
+    batch_size=100)
+
+#%%
+
+dataset["train"][0]["label"]
+#%%
+
+dataset.save_to_disk("./data/audioset_balanced_prepared")
+
+#%%
+from datasets import load_dataset, load_from_disk
+
+dataset = load_from_disk("./data/audioset_balanced_prepared")
+#%%
+import pylab as plt
+import numpy as np
+plt.imshow(np.array(dataset["train"][0]["input_values"]), cmap='viridis')
+
+#%%
+from datasets import Audio, load_dataset
+
+dataset_ = load_dataset(
+    "agkphysics/AudioSet", 
+    cache_dir="/home/lrauch/projects/birdMAE/data/audioset_balanced")
+
+dataset_ = dataset_.cast_column("audio", Audio(sampling_rate=32_000))
+from torchaudio.compliance.kaldi import fbank
+import torch
+fbank_features_test = fbank(
+                torch.from_numpy(dataset_["train"][0]["audio"]["array"]).unsqueeze(0),
+                htk_compat=True,
+                sample_frequency=32_000,
+                use_energy=False,
+                window_type='hanning',
+                num_mel_bins=128,
+                dither=0.0,
+                frame_shift=10
+)
+#%%
+fbank_features_test.shape
+
+plt.imshow(fbank_features_test.T, cmap='viridis')
+
+#%%
+
+fbank_features_test.T - np.array(dataset["train"][0]["input_values"])
+#%%
+import matplotlib.pyplot as plt
+from tqdm import tqdm 
+for i in tqdm(range(len(dataset["train"]))):
+    plt.imshow(np.array(dataset["train"][i]["input_values"]), cmap='viridis')
+    plt.show()
+#%%
+
+np.array(dataset["train"][0]["input_values"])
+
+
+
+#%%
+
 from datasets import Audio, load_dataset
 
 dataset = load_dataset(
