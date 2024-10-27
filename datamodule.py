@@ -131,7 +131,6 @@ class HFDataModule(pl.LightningDataModule):
                 self.val_data = load_from_disk(f"{self.saved_images}/test")
                 self.val_data.set_transform(self.val_image_transform)
                 
-
             else:
                 if self.save_to_disk: 
                     dataset = load_from_disk(f"{self.save_to_disk}/train")
@@ -190,28 +189,33 @@ class HFDataModule(pl.LightningDataModule):
 
         
         if stage == "test": 
-            if self.save_to_disk: 
-                self.test_data = load_from_disk(f"{self.save_to_disk}/test")
-            else: 
-                self.test_data = load_dataset(self.hf_path, self.hf_name, split=self.test_split, cache_dir=self.data_dir)
+            if self.saved_images:
+                self.test_data = load_from_disk(f"{self.saved_images}/test")
+                self.test_data.set_transform(self.test_image_transform)
+            
+            else:
+                if self.save_to_disk: 
+                    self.test_data = load_from_disk(f"{self.save_to_disk}/test")
+                else: 
+                    self.test_data = load_dataset(self.hf_path, self.hf_name, split=self.test_split, cache_dir=self.data_dir)
 
-                if "AudioSet" in self.hf_path:
-                    with open("/home/lrauch/projects/birdMAE/data/audioset_ontology_custom527.json", "r") as f:
-                        ontology = json.load(f)
-                    num_classes = len(ontology)
-                    label_names = list(ontology.keys())
-                    class_label = Sequence(ClassLabel(num_classes=num_classes, names=label_names))
-                    self.test_data = self.test_data.cast_column("human_labels", class_label)
-                    self.test_data = self.test_data.map(self._one_hot_encode, batched=True, batch_size=1000)
+                    if "AudioSet" in self.hf_path:
+                        with open("/home/lrauch/projects/birdMAE/data/audioset_ontology_custom527.json", "r") as f:
+                            ontology = json.load(f)
+                        num_classes = len(ontology)
+                        label_names = list(ontology.keys())
+                        class_label = Sequence(ClassLabel(num_classes=num_classes, names=label_names))
+                        self.test_data = self.test_data.cast_column("human_labels", class_label)
+                        self.test_data = self.test_data.map(self._one_hot_encode, batched=True, batch_size=1000)
 
-                    rows_to_remove = [6_182] #corrupted
-                    all_indices = list(range(len(self.test_data)))
-                    indices_to_keep = [i for i in all_indices if i not in rows_to_remove]
-                    self.test_data = self.test_data.select(indices_to_keep)
+                        rows_to_remove = [6_182] #corrupted
+                        all_indices = list(range(len(self.test_data)))
+                        indices_to_keep = [i for i in all_indices if i not in rows_to_remove]
+                        self.test_data = self.test_data.select(indices_to_keep)
 
-            self.test_data.set_format("numpy", columns=self.columns, output_all_columns=False)
-            self.test_data = self.test_data.cast_column("audio", Audio(sampling_rate=self.sampling_rate, mono=True, decode=True))
-            self.test_data.set_transform(self.test_transform)
+                self.test_data.set_format("numpy", columns=self.columns, output_all_columns=False)
+                self.test_data = self.test_data.cast_column("audio", Audio(sampling_rate=self.sampling_rate, mono=True, decode=True))
+                self.test_data.set_transform(self.test_transform)
 
     def train_dataloader(self) -> DataLoader:
         return DataLoader(
