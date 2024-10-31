@@ -667,9 +667,9 @@ dm = BirdSetDataModule(
         n_workers=3,
         val_split=0.2,
         task="multilabel",
-        classlimit=500, #limit of samples per class 
+        classlimit=600, #limit of samples per class 
         eventlimit=5, #limit of events that are extracted for each sample
-        sampling_rate=32000,
+        sampling_rate=32_000,
     ),
 )
 

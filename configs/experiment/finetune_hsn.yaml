@@ -21,23 +21,23 @@ train: true
 test: true
 
 logger:
-  experiment_name: birdset
+  experiment_name: birdset_repr
 
 data:
   loaders:
     train: 
       num_workers: 8
-      batch_size: 64
+      batch_size: 48
       shuffle: true
   transform:
     mixup:
       alpha: 10.
-      prob: 0.25
-      num_mix: 2
-      full_target: false
+      prob: 0.75
+      num_mix: 3
+      full_target: True
     mask2d: false
-    mask_t_prob: 0.2
-    mask_f_prob: 0.2
+    mask_t_prob: 0.0
+    mask_f_prob: 0.0
     timem: 96
     freqm: 24
 
@@ -45,12 +45,16 @@ data:
 trainer:
   max_epochs: 60
   limit_val_batches: 1.0
-  check_val_every_n_epoch: 1
+  check_val_every_n_epoch: 2
+  gradient_clip_val: 0.5
+  precision: 16-mixed
+
 
 module:
   optimizer:
     target:
-      lr: 1e-3
+      lr: 3e-4
+      weight_decay: 1e-2
     extras:
       layer_decay: null
 

@@ -3,6 +3,8 @@ import numpy as np
 from transformers.audio_utils import spectrogram, window_function, mel_filter_bank
 from omegaconf import DictConfig
 import torch 
+import torch.nn.functional as F
+
 from birdset.datamodule.components.event_decoding import EventDecoding
 
 from torchaudio.compliance.kaldi import fbank
@@ -109,9 +111,14 @@ class BaseTransform:
     
     def _pad_and_normalize(self, fbank_features):
         difference = self.target_length - fbank_features[0].shape[0]
+        min_value = fbank_features.min()
+        #min_value = -80
         if self.target_length > fbank_features.shape[0]:
-            m = torch.nn.ZeroPad2d((0, 0, 0, difference))
-            fbank_features = m(fbank_features)
+            padding = (0, 0, 0, difference)
+            fbank_features = F.pad(fbank_features, padding, value=min_value.item()) #no difference! 
+            #m = torch.nn.ZeroPad2d((0, 0, 0, difference))
+            #fbank_features = m(fbank_features)
+            
 
         #fbank_features = fbank_features.transpose(0,1).unsqueeze(0)
         # fbank_features = torch.transpose(fbank_features.squeeze(), 0, 1)
@@ -126,6 +133,20 @@ class BaseTransform:
             waveform_batch = [audio["array"] for audio in batch["audio"]]
         waveform_batch = self._process_waveforms(waveform_batch)
         fbank_features = self._compute_fbank_features(waveform_batch["input_values"])
+        
+        # from torchaudio.transforms import Spectrogram, MelScale
+        # from util.power_to_db import PowerToDB
+
+        # spectrogram = Spectrogram(n_fft=1024, hop_length=320, power=2)
+        # melscale = MelScale(n_mels=128, sample_rate=self.sampling_rate, n_stft=513)
+        # dbscale_conversion = PowerToDB()
+        # self.mean = -4.268
+        # self.std = 4.569
+
+        # fbank_features = spectrogram(waveform_batch["input_values"])
+        # fbank_features = melscale(fbank_features)
+        # fbank_features = dbscale_conversion(fbank_features).permute(0, 2, 1)
+
         fbank_features = self._pad_and_normalize(fbank_features)
         fbank_features = (fbank_features - self.mean) / (self.std * 2)
         return {
@@ -137,6 +158,13 @@ class TrainTransform(BaseTransform):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.event_decoder = EventDecoding(min_len=5, max_len=5, sampling_rate=self.sampling_rate)
+        
+        from birdset.datamodule.components.augmentations import MultilabelMix
+        wave_aug = [
+            MultilabelMix(p=0.7, min_snr_in_db=3.0, max_snr_in_db=30, mix_target="union", max_samples=1)
+        ]
+        import torch_audiomentations
+        self.wave_aug = torch_audiomentations.Compose(wave_aug, output_type="object_dict")
     
     def cyclic_rolling_start(self, waveforms):
         batch_size, waveform_length = waveforms.shape
@@ -158,14 +186,32 @@ class TrainTransform(BaseTransform):
         waveform_batch = self._process_waveforms(waveform_batch) # list of arrays with shape len wav --> stacked torch tensor batch x 320_000 torch float 32
         waveform_batch["input_values"] = self.cyclic_rolling_start(waveform_batch["input_values"]) # same shape as before
 
+
+        output_dict = self.wave_aug(waveform_batch["input_values"].unsqueeze(1), sample_rate=self.sampling_rate, targets=torch.Tensor(batch[self.columns[1]]).unsqueeze(1).unsqueeze(1))
+        waveform_batch["input_values"] = output_dict["samples"].squeeze(1)
+        batch[self.columns[1]] = output_dict["targets"].squeeze(1).squeeze(1)
+
         # if self.mixup: 
         #     waveform_batch["input_values"], batch[self.columns[1]] = self.mix_fn(waveform_batch["input_values"], batch[self.columns[1]])
         #waveform_batch["input_values"], batch[self.columns[1]] = self._mixup(waveform_batch, batch[self.columns[1]])
-        
+
+        # from torchaudio.transforms import Spectrogram, MelScale
+        # from util.power_to_db import PowerToDB
+
+        # spectrogram = Spectrogram(n_fft=1024, hop_length=320, power=2)
+        # melscale = MelScale(n_mels=128, sample_rate=self.sampling_rate, n_stft=513)
+        # dbscale_conversion = PowerToDB()
+        # self.mean = -4.268
+        # self.std = 4.569
+
+        # fbank_features = spectrogram(waveform_batch["input_values"])
+        # fbank_features = melscale(fbank_features)
+        # fbank_features = dbscale_conversion(fbank_features).permute(0, 2, 1)
+
         fbank_features = self._compute_fbank_features(waveform_batch["input_values"]) #shape now: batch, 998 height, 128 width
 
-        if self.mixup_fn: #spec mxup
-            fbank_features, batch[self.columns[1]] = self.mixup_fn(fbank_features, batch[self.columns[1]]) # shape now: batch, 998, 128
+        # if self.mixup_fn: #spec mxup
+        #     fbank_features, batch[self.columns[1]] = self.mixup_fn(fbank_features, batch[self.columns[1]]) # shape now: batch, 998, 128
 
         fbank_features = self._pad_and_normalize(fbank_features) # shape: batch, time(1024) padded, freq(128)
         

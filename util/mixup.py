@@ -90,6 +90,7 @@ class SpecMixup:
         for i in range(batch_size):
             pool = torch.cat([torch.arange(0, i), torch.arange(i+1, batch_size)])
             mix_indices[i, 1:] = pool[torch.randperm(batch_size-1)[:self.num_mix-1]]
+            #mix_indices[i, 1:] = 14
 
         # Perform mixup
         x_mix = torch.zeros_like(x)

@@ -24,7 +24,7 @@ data:
   loaders:
     train: 
       num_workers: 24
-      batch_size: 64
+      batch_size: 128
       shuffle: true
 logger:
   experiment_name: amae_rep

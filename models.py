@@ -559,7 +559,7 @@ class VIT(L.LightningModule, VisionTransformer):
         return outcome 
 
     def forward(self, x):
-        if self.mask_t_prob > 0.0 or self.mask_f_prob > 0.0:
+        if self.mask_t_prob > 0.0 or self.mask_f_prob > 0.0: #shape val: 64, 1, 512, 128
             x = self.forward_features_mask(x)
         else:
             x = self.forward_features(x)
@@ -634,6 +634,7 @@ class VIT(L.LightningModule, VisionTransformer):
             loss = self.loss(pred, targets.float())
 
         #metric = self.val_metric(pred, targets)
+        pred = torch.softmax(pred, dim=1)
         self.val_predictions.append(pred.detach().cpu())
         self.val_targets.append(targets.detach().cpu())
 
@@ -678,9 +679,9 @@ class VIT(L.LightningModule, VisionTransformer):
     def configure_optimizers(self):
 
         #heuristic:
-        eff_batch_size = self.trainer.accumulate_grad_batches * self.trainer.num_devices * self.train_batch_size
-        self.optimizer_cfg["lr"] = self.optimizer_cfg["lr"] * eff_batch_size / 256
-        print("effective learning rate:", self.optimizer_cfg["lr"], self.layer_decay)
+        # eff_batch_size = self.trainer.accumulate_grad_batches * self.trainer.num_devices * self.train_batch_size
+        # self.optimizer_cfg["lr"] = self.optimizer_cfg["lr"] * eff_batch_size / 256
+        # print("effective learning rate:", self.optimizer_cfg["lr"], self.layer_decay)
 
         if self.layer_decay:
             params = param_groups_lrd(
@@ -731,7 +732,7 @@ class VIT(L.LightningModule, VisionTransformer):
     def load_pretrained_weights(self, pretrained_weights_path, dataset_name): 
         img_size = (self.target_length, 128)
 
-        if dataset_name == "esc50":
+        if self.target_length == 512: #esc50, hsn, 5 seconds
             num_patches = 512 # audioset
 
             self.patch_embed = PatchEmbed(img_size, 16, 1, 768)
@@ -769,7 +770,7 @@ class VIT(L.LightningModule, VisionTransformer):
             pos_embed = get_2d_sincos_pos_embed_flexible(self.pos_embed.size(-1), patch_hw, cls_token=True) # not trained, overwrite from sincos
             self.pos_embed.data = torch.from_numpy(pos_embed).float().unsqueeze(0) 
 
-        elif dataset_name == "audioset_balanced": 
+        elif self.target_length == 1024: #audioset, 10 seconds
             self.patch_embed = PatchEmbed_new(img_size=img_size, patch_size=(16,16), in_chans=1, embed_dim=self.embed_dim, stride=16) # no overlap. stride=img_size=16
             num_patches = self.patch_embed.num_patches
             #num_patches = 512 # assume audioset, 1024//16=64, 128//16=8, 512=64x8
