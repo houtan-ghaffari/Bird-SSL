@@ -22,7 +22,7 @@ import glob
 import librosa
 import soundfile as sf
 
-from util.mixup import SpecMixup
+from util.mixup import SpecMixup, SpecMixupN
 
 logger = logging.get_logger(__name__)
 
@@ -159,10 +159,17 @@ class TrainTransform(BaseTransform):
         super().__init__(*args, **kwargs)
         self.event_decoder = EventDecoding(min_len=5, max_len=5, sampling_rate=self.sampling_rate)
         
-        from birdset.datamodule.components.augmentations import MultilabelMix
+        from birdset.datamodule.components.augmentations import MultilabelMix, AddBackgroundNoise, NoCallMixer
+        from torch_audiomentations import AddColoredNoise
+
+        self.no_call_mixer = NoCallMixer(directory="/home/lrauch/projects/birdMAE/data/background_noise/", p=0.1, sampling_rate=32_000, length=5)
+
         wave_aug = [
-            MultilabelMix(p=0.7, min_snr_in_db=3.0, max_snr_in_db=30, mix_target="union", max_samples=1)
-        ]
+            MultilabelMix(p=0.9, min_snr_in_db=5.0, max_snr_in_db=25.0, mix_target="union", max_samples=2),
+            AddColoredNoise(p=0.2, min_snr_in_db=5, max_snr_in_db=20, max_f_decay=0, min_f_decay=-2),
+            AddBackgroundNoise(p=0.5, min_snr_in_db=5, max_snr_in_db=15, sample_rate=32_000, target_rate=32_000, background_paths=["/home/lrauch/projects/birdMAE/data/background_noise/"]),
+        ] # problem that multilabel mix is only done on the samples chosen in the batch for mixup, not the complete batch. 
+
         import torch_audiomentations
         self.wave_aug = torch_audiomentations.Compose(wave_aug, output_type="object_dict")
     
@@ -186,10 +193,11 @@ class TrainTransform(BaseTransform):
         waveform_batch = self._process_waveforms(waveform_batch) # list of arrays with shape len wav --> stacked torch tensor batch x 320_000 torch float 32
         waveform_batch["input_values"] = self.cyclic_rolling_start(waveform_batch["input_values"]) # same shape as before
 
-
         output_dict = self.wave_aug(waveform_batch["input_values"].unsqueeze(1), sample_rate=self.sampling_rate, targets=torch.Tensor(batch[self.columns[1]]).unsqueeze(1).unsqueeze(1))
         waveform_batch["input_values"] = output_dict["samples"].squeeze(1)
         batch[self.columns[1]] = output_dict["targets"].squeeze(1).squeeze(1)
+
+        waveform_batch["input_values"], batch[self.columns[1]] = self.no_call_mixer(waveform_batch["input_values"], batch[self.columns[1]])
 
         # if self.mixup: 
         #     waveform_batch["input_values"], batch[self.columns[1]] = self.mix_fn(waveform_batch["input_values"], batch[self.columns[1]])
@@ -210,8 +218,10 @@ class TrainTransform(BaseTransform):
 
         fbank_features = self._compute_fbank_features(waveform_batch["input_values"]) #shape now: batch, 998 height, 128 width
 
+        # self.mixup_fn = SpecMixupN()
         # if self.mixup_fn: #spec mxup
-        #     fbank_features, batch[self.columns[1]] = self.mixup_fn(fbank_features, batch[self.columns[1]]) # shape now: batch, 998, 128
+        #     if torch.rand(1) < 0.75:
+        #         fbank_features, batch[self.columns[1]] = self.mixup_fn(fbank_features, batch[self.columns[1]]) # shape now: batch, 998, 128
 
         fbank_features = self._pad_and_normalize(fbank_features) # shape: batch, time(1024) padded, freq(128)
         
