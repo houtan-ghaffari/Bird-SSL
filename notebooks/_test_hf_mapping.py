@@ -409,3 +409,8 @@ print(f"Dataset size: {dataset_size_bytes} bytes")
 print(f"Dataset size: {dataset_size_mb:.2f} MB")
 print(f"Dataset size: {dataset_size_gb:.2f} GB")
 #dataset = dataset.cast_column("audio", Audio(sampling_rate=32_000))
+
+#%%
+from datasets import load_dataset
+
+dataset = load_dataset("DBD-research-group/BirdSet", "XCM", cache_dir="/home/lrauch/projects/birdMAE/data/XCM", num_proc=3)

@@ -733,7 +733,11 @@ class VIT(L.LightningModule, VisionTransformer):
         img_size = (self.target_length, 128)
 
         if self.target_length == 512: #esc50, hsn, 5 seconds
-            num_patches = 512 # audioset
+            #num_patches = 512 # audioset
+            if "xc" in self.pretrained_weights_path:
+                num_patches = 256 # birdset
+            else:
+                num_patches = 512 # audioset
 
             self.patch_embed = PatchEmbed(img_size, 16, 1, 768)
             self.pos_embed = nn.Parameter(torch.zeros(1, num_patches + 1, 768), requires_grad=False) #to load pretrained pos embed
@@ -771,8 +775,13 @@ class VIT(L.LightningModule, VisionTransformer):
             self.pos_embed.data = torch.from_numpy(pos_embed).float().unsqueeze(0) 
 
         elif self.target_length == 1024: #audioset, 10 seconds
+
             self.patch_embed = PatchEmbed_new(img_size=img_size, patch_size=(16,16), in_chans=1, embed_dim=self.embed_dim, stride=16) # no overlap. stride=img_size=16
-            num_patches = self.patch_embed.num_patches
+           
+            if "xc" in self.pretrained_weights_path:
+                num_patches = 256 # birdset # does not work right now 
+            else:
+                num_patches =  num_patches = self.patch_embed.num_patches # audioset
             #num_patches = 512 # assume audioset, 1024//16=64, 128//16=8, 512=64x8
             self.pos_embed = nn.Parameter(torch.zeros(1, num_patches + 1, self.embed_dim), requires_grad=False)  # fixed sin-cos embedding
 

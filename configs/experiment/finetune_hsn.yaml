@@ -3,7 +3,7 @@ defaults:
   - override /callbacks: default
   - override /data/dataset: HSN
   - override /data/loaders: esc50
-  - override /data/transform: melbank_esc
+  - override /data/transform: melbank_birdset
   - override /logger: mlflow
   - override /module/network: vit_base_16
   - override /module/optimizer: adamw
@@ -29,17 +29,6 @@ data:
       num_workers: 8
       batch_size: 48
       shuffle: true
-  transform:
-    mixup:
-      alpha: 10.
-      prob: 0.75
-      num_mix: 3
-      full_target: True
-    mask2d: false
-    mask_t_prob: 0.0
-    mask_f_prob: 0.0
-    timem: 96
-    freqm: 24
 
     
 trainer:
@@ -53,9 +42,9 @@ trainer:
 module:
   optimizer:
     target:
-      #lr: 3e-4
-      lr: 5e-5
+      lr: 3e-4
+      #lr: 1e-3
       weight_decay: 1e-2
     extras:
-      layer_decay: null
+      layer_decay: 0.75
 

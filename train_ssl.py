@@ -44,12 +44,22 @@ def train(cfg: DictConfig):
     L.seed_everything(cfg.seed)
 
     log.info("Setup datamodule")
-    datamodule = HFDataModule(
-        dataset_configs=cfg.data.dataset,
-        loader_configs=cfg.data.loaders,
-        transform_configs=cfg.data.transform,
-        sampling_rate=cfg.module.network.sampling_rate
-    )
+
+
+    if cfg.data.dataset.name == "XCM":
+        datamodule = BirdSetDataModule(
+            dataset_configs=cfg.data.dataset,
+            loader_configs=cfg.data.loaders,
+            transform_configs=cfg.data.transform,
+            sampling_rate=cfg.module.network.sampling_rate
+        )
+    else:
+        datamodule = HFDataModule(
+            dataset_configs=cfg.data.dataset,
+            loader_configs=cfg.data.loaders,
+            transform_configs=cfg.data.transform,
+            sampling_rate=cfg.module.network.sampling_rate
+        )
 
     if sys.gettrace():
          log.info("Debugging mode, no logger")

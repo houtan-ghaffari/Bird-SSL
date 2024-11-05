@@ -4,14 +4,11 @@ from datetime import datetime
 from omegaconf import DictConfig
 from datasets import load_dataset, Audio, ClassLabel, load_from_disk, Sequence
 from torch.utils.data import DataLoader
-import torch
 import lightning.pytorch as pl 
 from lightning.pytorch.utilities.rank_zero import rank_zero_info
 from lightning.pytorch.utilities.types import EVAL_DATALOADERS, TRAIN_DATALOADERS
 import numpy as np 
-
-from configs import Config, DataModuleConfig, ModuleConfig
-from transforms import TrainTransform, EvalTransform, ImageTrainTransform, ImageEvalTransform
+from transforms import TrainTransform, EvalTransform, ImageTrainTransform, ImageEvalTransform, BirdSetTrainTransform
 
 class HFDataModule(pl.LightningDataModule):
     def __init__(
@@ -251,17 +248,6 @@ class HFDataModule(pl.LightningDataModule):
         
         return {self.columns[1]: class_one_hot_matrix}
         
-# def one_hot_encode(batch):
-#     batch_size = len(batch['labels'])
-#     one_hot_labels = []
-#     for i in range(batch_size):
-#         one_hot = [0] * num_classes
-#         for index in batch['labels'][i]:
-#             one_hot[index] = 1
-#         one_hot_labels.append(one_hot)
-#     batch['labels_one_hot'] = one_hot_labels
-#     return batch
-
 class BirdSetDataModule(HFDataModule):
     def __init__(
             self, 
@@ -276,7 +262,7 @@ class BirdSetDataModule(HFDataModule):
             transform_configs, 
             sampling_rate)
         
-        self.train_transform = TrainTransform(
+        self.train_transform = BirdSetTrainTransform(
             transform_params=transform_configs,
             sampling_rate=sampling_rate,
             target_length=dataset_configs.target_length,
@@ -312,7 +298,11 @@ class BirdSetDataModule(HFDataModule):
     def setup(self, stage:str) -> None: 
         if stage == "fit" or stage is None: 
             self.train_data = load_from_disk(f"{self.save_to_disk}/train")
-            self.val_data = load_from_disk(f"{self.save_to_disk}/valid")
+            self.val_data = None
+
+            if self.hf_name != "XCM":
+                print("no val in xcm")
+                self.val_data = load_from_disk(f"{self.save_to_disk}/valid")
             
             self.train_data.set_format("numpy", columns=self.columns, output_all_columns=False)
             #self.train_data = self.train_data.cast_column("audio", Audio(sampling_rate=self.sampling_rate, mono=True, decode=True))
