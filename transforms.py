@@ -286,13 +286,9 @@ class ImageTrainTransform(BaseTransform):
         super().__init__(*args, **kwargs)
     def __call__(self, batch):
         image_batch = [torch.tensor(np.array(images).T) for images in batch["input_values"]] # list of tensors with shape 998, 128
-        print("before", image_batch[0].shape)
         image_batch = [self._pad_and_normalize(image) for image in image_batch] # list of tensors with shape 1024, 128
-        print("after pad", image_batch[0].shape)
         image_batch = torch.stack(image_batch) # batch, 1024, 128
-        print("after stack", image_batch.shape)
         image_batch = image_batch - image_batch.mean(axis=(1, 2), keepdims=True) # batch, 1024, 128
-        print("after mean", image_batch.shape)
         fbank_features = self.cyclic_rolling_start_images(image_batch) # batch, 1024, 128
 
         if self.mixup_fn: #spec mxup
@@ -318,7 +314,6 @@ class ImageTrainTransform(BaseTransform):
 
     def cyclic_rolling_start_images(self, images):
         # Assuming images is of shape (batch_size, width, height)
-        print(images.shape, flush=True)
         batch_size, width, height = images.shape
         idx = np.random.randint(0, width, size=batch_size)  # Random starting indices for each image in the batch
         
