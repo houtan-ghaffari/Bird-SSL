@@ -318,7 +318,7 @@ class ImageTrainTransform(BaseTransform):
 
     def cyclic_rolling_start_images(self, images):
         # Assuming images is of shape (batch_size, width, height)
-        print(images.shape)
+        print(images.shape, flush=True)
         batch_size, width, height = images.shape
         idx = np.random.randint(0, width, size=batch_size)  # Random starting indices for each image in the batch
         

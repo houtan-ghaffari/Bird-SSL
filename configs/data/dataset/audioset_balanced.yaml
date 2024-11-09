@@ -14,7 +14,7 @@ mean: -4.2677393
 std: 4.5689974
 save_to_disk: ${paths.dataset_dir}/saved_to_disk
 test_in_val: true
-#saved_images: ${paths.dataset_dir}/audioset_balanced_prepared_16
-saved_images: null
+saved_images: ${paths.dataset_dir}/audioset_balanced_prepared_16
+#saved_images: null
 
 
