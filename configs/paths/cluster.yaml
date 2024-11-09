@@ -1,4 +1,4 @@
-root_dir: root_dir: ${oc.env:PROJECT_ROOT}
+root_dir: ${oc.env:PROJECT_ROOT}
 work_dir: ${hydra:runtime.cwd}
 
 output_dir: ${hydra:runtime.output_dir}
@@ -6,4 +6,5 @@ output_dir: ${hydra:runtime.output_dir}
 dataset_dir: /mnt/datasets/bird_recordings/birdset_hf_download/${datamodule.dataset.hf_name}
 log_dir: /mnt/work/bird2vec/logs_pretrain_audioset_MAE/
 model_dir: ${paths.log_dir}/model_checkpoints/
+background_dir: null
 
