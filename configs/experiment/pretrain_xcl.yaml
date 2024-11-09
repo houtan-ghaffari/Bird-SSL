@@ -19,12 +19,12 @@ task_name: "pretrain_xcl" # improve this
 data:
   loaders:
     train: 
-      num_workers: 24
-      batch_size: 64
+      num_workers: 16
+      batch_size: 128
       shuffle: true
-  dataset:
-    test_in_val: false
-
+      pin_memory: false
+      drop_last: true
+      prefetch_factor: 2
 
 logger:
   experiment_name: pretrain_xcl
