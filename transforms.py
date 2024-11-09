@@ -400,38 +400,46 @@ class BirdSetTrainTransform(TrainTransform):
 
         self.event_decoder = EventDecoding(min_len=5, max_len=5, sampling_rate=self.sampling_rate)
 
-        self.no_call_mixer = NoCallMixer(
-            directory=self.no_call_mixer_params.directory,
-            p=self.no_call_mixer_params.p,
-            sampling_rate=self.no_call_mixer_params.sampling_rate,
-            length=self.no_call_mixer_params.length
-        )
+        try:
+            self.no_call_mixer = NoCallMixer(
+                directory=self.no_call_mixer_params.directory,
+                p=self.no_call_mixer_params.p,
+                sampling_rate=self.no_call_mixer_params.sampling_rate,
+                length=self.no_call_mixer_params.length
+            )
+        except:
+            print("no no_call_mixer")
+            self.no_call_mixer = None #!TODO FIX this!
 
-        wave_augs = [
-            MultilabelMix(
-                p=self.mixup_wave_params.p, 
-                min_snr_in_db=self.mixup_wave_params.min_snr_in_db, 
-                max_snr_in_db=self.mixup_wave_params.max_snr_in_db, 
-                mix_target=self.mixup_wave_params.mix_target, 
-                max_samples=self.mixup_wave_params.max_samples),
+        try: 
+            wave_augs = [
+                MultilabelMix(
+                    p=self.mixup_wave_params.p, 
+                    min_snr_in_db=self.mixup_wave_params.min_snr_in_db, 
+                    max_snr_in_db=self.mixup_wave_params.max_snr_in_db, 
+                    mix_target=self.mixup_wave_params.mix_target, 
+                    max_samples=self.mixup_wave_params.max_samples),
 
-            AddColoredNoise(
-                p=self.colored_noise_params.p, 
-                min_snr_in_db=self.colored_noise_params.min_snr_in_db, 
-                max_snr_in_db=self.colored_noise_params.max_snr_in_db, 
-                max_f_decay=self.colored_noise_params.max_f_decay, 
-                min_f_decay=self.colored_noise_params.min_f_decay),
+                AddColoredNoise(
+                    p=self.colored_noise_params.p, 
+                    min_snr_in_db=self.colored_noise_params.min_snr_in_db, 
+                    max_snr_in_db=self.colored_noise_params.max_snr_in_db, 
+                    max_f_decay=self.colored_noise_params.max_f_decay, 
+                    min_f_decay=self.colored_noise_params.min_f_decay),
 
-            AddBackgroundNoise(
-                p=self.background_noise_params.p, 
-                min_snr_in_db=self.background_noise_params.min_snr_in_db, 
-                max_snr_in_db=self.background_noise_params.max_snr_in_db, 
-                sample_rate=self.background_noise_params.sample_rate, 
-                target_rate=self.background_noise_params.target_rate, 
-                background_paths=self.background_noise_params.background_paths),
-        ]
+                AddBackgroundNoise(
+                    p=self.background_noise_params.p, 
+                    min_snr_in_db=self.background_noise_params.min_snr_in_db, 
+                    max_snr_in_db=self.background_noise_params.max_snr_in_db, 
+                    sample_rate=self.background_noise_params.sample_rate, 
+                    target_rate=self.background_noise_params.target_rate, 
+                    background_paths=self.background_noise_params.background_paths),
+            ]
 
-        self.wave_aug = torch_audiomentations.Compose(wave_augs, output_type="object_dict")
+            self.wave_aug = torch_audiomentations.Compose(wave_augs, output_type="object_dict")
+        except:
+            print("no wave_aug")
+            self.wave_aug = None #!TODO FIX this!
 
     def __call__(self, batch):
         try:
