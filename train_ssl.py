@@ -46,7 +46,7 @@ def train(cfg: DictConfig):
     log.info("Setup datamodule")
 
 
-    if cfg.data.dataset.name == "XCM":
+    if cfg.data.dataset.name == "XCM" or cfg.data.dataset.name == "XCL":
         datamodule = BirdSetDataModule(
             dataset_configs=cfg.data.dataset,
             loader_configs=cfg.data.loaders,

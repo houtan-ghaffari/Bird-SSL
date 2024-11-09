@@ -125,9 +125,12 @@ class HFDataModule(pl.LightningDataModule):
                 self.train_data = load_from_disk(f"{self.saved_images}/train")
                 self.train_data.set_transform(self.train_image_transform)
 
-                self.val_data = load_from_disk(f"{self.saved_images}/test")
-                self.val_data.set_transform(self.val_image_transform)
-                
+                try: 
+                    self.val_data = load_from_disk(f"{self.saved_images}/test")
+                    self.val_data.set_transform(self.val_image_transform) # improve!!
+                except: 
+                    print("no test in saved images")
+                    
             else:
                 if self.save_to_disk: 
                     dataset = load_from_disk(f"{self.save_to_disk}/train")
@@ -297,27 +300,38 @@ class BirdSetDataModule(HFDataModule):
 
     def setup(self, stage:str) -> None: 
         if stage == "fit" or stage is None: 
-            self.train_data = load_from_disk(f"{self.save_to_disk}/train")
-            self.val_data = None
+            if self.saved_images:
+                self.train_data = load_from_disk(f"{self.saved_images}/train")
+                self.train_data.set_transform(self.train_image_transform)
+                self.val_data = None
 
-            if self.hf_name != "XCM":
-                print("no val in xcm")
-                self.val_data = load_from_disk(f"{self.save_to_disk}/valid")
+                try: 
+                    self.val_data = load_from_disk(f"{self.saved_images}/test")
+                    self.val_data.set_transform(self.val_image_transform) # improve!!
+                except: 
+                    print("no test in saved images")
+            else:
+                self.train_data = load_from_disk(f"{self.save_to_disk}/train")
+                self.val_data = None
+
+                if self.hf_name != "XCM":
+                    print("no val in xcm")
+                    self.val_data = load_from_disk(f"{self.save_to_disk}/valid")
             
-            self.train_data.set_format("numpy", columns=self.columns, output_all_columns=False)
-            #self.train_data = self.train_data.cast_column("audio", Audio(sampling_rate=self.sampling_rate, mono=True, decode=True))
-            self.train_data.set_transform(self.train_transform)
-            #self.train_data = self.train_data.select(range(100))
+                self.train_data.set_format("numpy", columns=self.columns, output_all_columns=False)
+                #self.train_data = self.train_data.cast_column("audio", Audio(sampling_rate=self.sampling_rate, mono=True, decode=True))
+                self.train_data.set_transform(self.train_transform)
+                #self.train_data = self.train_data.select(range(100))
 
-            if self.val_data:
-                self.val_data.set_format("numpy", columns=self.columns, output_all_columns=False)
-                #self.val_data = self.val_data.cast_column("audio", Audio(sampling_rate=self.sampling_rate, mono=True, decode=True))
-                self.val_data.set_transform(self.val_transform)
-                
-            if self.test_in_val == True: # not nice, only for as
-                self.val_data = load_from_disk(f"{self.save_to_disk}/test")
-                self.val_data.set_format("numpy", columns=self.columns, output_all_columns=False)
-                self.val_data.set_transform(self.val_transform)
+                if self.val_data:
+                    self.val_data.set_format("numpy", columns=self.columns, output_all_columns=False)
+                    #self.val_data = self.val_data.cast_column("audio", Audio(sampling_rate=self.sampling_rate, mono=True, decode=True))
+                    self.val_data.set_transform(self.val_transform)
+                    
+                if self.test_in_val == True: # not nice, only for as
+                    self.val_data = load_from_disk(f"{self.save_to_disk}/test")
+                    self.val_data.set_format("numpy", columns=self.columns, output_all_columns=False)
+                    self.val_data.set_transform(self.val_transform)
 
         
         if stage == "test": 

@@ -1,6 +1,6 @@
 # @package _global_
 defaults:
-  - override /callbacks: default
+  - override /callbacks: default_ssl
   - override /data/dataset: audioset_balanced
   - override /data/loaders: audioset_balanced
   - override /data/transform: pretrain_melbank_asb
