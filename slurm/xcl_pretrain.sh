@@ -1,6 +1,6 @@
 #!/usr/bin/zsh
 #SBATCH --mem=200gb
-#SBATCH --ntasks=4
+#SBATCH --ntasks-per-node=4
 #SBATCH --cpus-per-task=24
 #SBATCH --gres=gpu:4
 #SBATCH --partition=main
