@@ -2,11 +2,11 @@
 #SBATCH --mem=200gb
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=24
-#SBATCH --gres=gpu:1
+#SBATCH --gres=gpu:4
 #SBATCH --partition=main
-#SBATCH --job-name=birdMAE_pretrain_XCL_scratch
-#SBATCH --output=/mnt/work/bird2vec/logs/%x_test_scratch.log
-#SBATCH --exclude=gpu-v100-1,gpu-v100-2,gpu-v100-3,gpu-v100-4,gpu-a100-3
+#SBATCH --job-name=birdMAE_pretrain_XCL_scratch_mgpu
+#SBATCH --output=/mnt/work/bird2vec/logs/%_mgpu.log
+#SBATCH --exclude=gpu-v100-1,gpu-v100-2,gpu-v100-3,gpu-v100-4
 #####SBATCH --nodelist=gpu-a100-5
 ####SBATCH --array=3-3%3
 
