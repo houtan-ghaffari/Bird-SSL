@@ -14,4 +14,5 @@ mean: -7.2
 std: 4.43
 save_to_disk: null
 test_in_val: false
-saved_images: /mnt/datasets/bird_recordings/birdset_prepared_images/xcl_melbank_500limit_2events_
+###saved_images: /mnt/datasets/bird_recordings/birdset_prepared_images/xcl_melbank_500limit_2events_
+saved_images: /scratch/birdset/xcl_melbank_500limit_2events_

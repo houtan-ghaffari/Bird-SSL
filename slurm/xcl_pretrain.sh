@@ -4,9 +4,9 @@
 #SBATCH --cpus-per-task=24
 #SBATCH --gres=gpu:1
 #SBATCH --partition=main
-#SBATCH --job-name=birdMAE_pretrain_XCL
-#SBATCH --output=/mnt/work/bird2vec/logs/%x_%a.log
-#SBATCH --exclude=gpu-v100-1,gpu-v100-2,gpu-v100-3,gpu-v100-4
+#SBATCH --job-name=birdMAE_pretrain_XCL_scratch
+#SBATCH --output=/mnt/work/bird2vec/logs/%x_test_scratch.log
+#SBATCH --exclude=gpu-v100-1,gpu-v100-2,gpu-v100-3,gpu-v100-4,gpu-a100-3
 #####SBATCH --nodelist=gpu-a100-5
 ####SBATCH --array=3-3%3
 
