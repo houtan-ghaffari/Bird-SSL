@@ -1,5 +1,6 @@
 from dataclasses import dataclass
 import numpy as np
+import hydra
 from transformers.audio_utils import spectrogram, window_function, mel_filter_bank
 from omegaconf import DictConfig
 import torch 
@@ -47,12 +48,6 @@ class BaseTransform:
         self.clip_duration = clip_duration
         self.fbank_params = transform_params.fbank
         self.transform_params = transform_params
-        #self.mel_filters = self._init_mel_filters()
-
-        # self.window = window_function(
-        #     window_length=self.spectrogram_params.frame_length, 
-        #     name=window_params.type, 
-        #     periodic=window_params.periodic)  
 
         self.feature_extractor = DefaultFeatureExtractor(
             feature_size=1,
@@ -394,10 +389,6 @@ class BirdSetTrainTransform(TrainTransform):
         super().__init__(*args, **kwargs)
 
         self.no_call_mixer_params = self.transform_params.no_call_mixer
-        self.mixup_wave_params = self.transform_params.mixup_wave
-        self.colored_noise_params = self.transform_params.colored_noise
-        self.background_noise_params = self.transform_params.background_noise
-
         self.event_decoder = EventDecoding(min_len=5, max_len=5, sampling_rate=self.sampling_rate)
 
         try:
@@ -410,36 +401,14 @@ class BirdSetTrainTransform(TrainTransform):
         except:
             print("no no_call_mixer")
             self.no_call_mixer = None #!TODO FIX this!
+        
 
-        try: 
-            wave_augs = [
-                MultilabelMix(
-                    p=self.mixup_wave_params.p, 
-                    min_snr_in_db=self.mixup_wave_params.min_snr_in_db, 
-                    max_snr_in_db=self.mixup_wave_params.max_snr_in_db, 
-                    mix_target=self.mixup_wave_params.mix_target, 
-                    max_samples=self.mixup_wave_params.max_samples),
+        # waveform augmentations
+        wave_augs = []
+        for names, augs in self.transform_params.waveform_augmentations.items():
+            wave_augs.append(hydra.utils.instantiate(augs))
 
-                AddColoredNoise(
-                    p=self.colored_noise_params.p, 
-                    min_snr_in_db=self.colored_noise_params.min_snr_in_db, 
-                    max_snr_in_db=self.colored_noise_params.max_snr_in_db, 
-                    max_f_decay=self.colored_noise_params.max_f_decay, 
-                    min_f_decay=self.colored_noise_params.min_f_decay),
-
-                AddBackgroundNoise(
-                    p=self.background_noise_params.p, 
-                    min_snr_in_db=self.background_noise_params.min_snr_in_db, 
-                    max_snr_in_db=self.background_noise_params.max_snr_in_db, 
-                    sample_rate=self.background_noise_params.sample_rate, 
-                    target_rate=self.background_noise_params.target_rate, 
-                    background_paths=self.background_noise_params.background_paths),
-            ]
-
-            self.wave_aug = torch_audiomentations.Compose(wave_augs, output_type="object_dict")
-        except:
-            print("no wave_aug")
-            self.wave_aug = None #!TODO FIX this!
+        self.wave_aug = torch_audiomentations.Compose(wave_augs, output_type="object_dict")
 
     def __call__(self, batch):
         try:

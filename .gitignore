@@ -4,4 +4,7 @@
 /logs/
 /__pycache__/
 *.pyc
+/*.pyc
 /weights/
+util/__pycache__/pos_embed.cpython-310.pyc
+util/__pycache__/pos_embed.cpython-310.pyc
