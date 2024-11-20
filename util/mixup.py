@@ -136,7 +136,6 @@ class SpecMixupN:
         device = x.device
         is_waveform = len(x.shape) == 2  # True for waveforms, False for spectrograms
 
-
         snr_distribution = torch.distributions.Uniform(
             low=torch.tensor(
                 self.min_snr_in_db,

@@ -404,11 +404,14 @@ class BirdSetTrainTransform(TrainTransform):
         
 
         # waveform augmentations
-        wave_augs = []
-        for names, augs in self.transform_params.waveform_augmentations.items():
-            wave_augs.append(hydra.utils.instantiate(augs))
+        if self.transform_params.get('waveform_augmentations'):
+            wave_augs = []
+            for names, augs in self.transform_params.waveform_augmentations.items():
+                wave_augs.append(hydra.utils.instantiate(augs))
 
-        self.wave_aug = torch_audiomentations.Compose(wave_augs, output_type="object_dict")
+            self.wave_aug = torch_audiomentations.Compose(wave_augs, output_type="object_dict")
+        else:
+            self.wave_aug = None
 
     def __call__(self, batch):
         try:
@@ -420,19 +423,31 @@ class BirdSetTrainTransform(TrainTransform):
         waveform_batch = self._process_waveforms(waveform_batch)
         waveform_batch["input_values"] = self.cyclic_rolling_start(waveform_batch["input_values"])
 
-        # waveform augmentations
-        output_dict = self.wave_aug(
-            waveform_batch["input_values"].unsqueeze(1), 
-            sample_rate=self.sampling_rate, 
-            targets=torch.Tensor(batch[self.columns[1]]).unsqueeze(1).unsqueeze(1))
-        waveform_batch["input_values"] = output_dict["samples"].squeeze(1)
-        batch[self.columns[1]] = output_dict["targets"].squeeze(1).squeeze(1)
+        #waveform augmentations
+        if self.wave_aug:
+            output_dict = self.wave_aug(
+                waveform_batch["input_values"].unsqueeze(1), 
+                sample_rate=self.sampling_rate, 
+                targets=torch.Tensor(batch[self.columns[1]]).unsqueeze(1).unsqueeze(1))
+            waveform_batch["input_values"] = output_dict["samples"].squeeze(1)
+            batch[self.columns[1]] = output_dict["targets"].squeeze(1).squeeze(1)
 
-        waveform_batch["input_values"], batch[self.columns[1]] = self.no_call_mixer(
-            waveform_batch["input_values"], 
-            batch[self.columns[1]])
-        
+        if self.no_call_mixer:
+            waveform_batch["input_values"], batch[self.columns[1]] = self.no_call_mixer(
+                waveform_batch["input_values"], 
+                batch[self.columns[1]])
+            
         fbank_features = self._compute_fbank_features(waveform_batch["input_values"])
+
+        # self.mixup_fn = SpecMixupN(
+        #     num_mix=2,
+        #     min_snr_in_db=5.0,
+        #     max_snr_in_db=25.0,
+        #     full_target= True
+        # )
+        # if self.mixup_fn: #spec mxup
+        #     if torch.rand(1) < 0.9:
+        #         fbank_features, batch[self.columns[1]] = self.mixup_fn(fbank_features, batch[self.columns[1]]) 
         fbank_features = self._pad_and_normalize(fbank_features)
 
         if self.freqm: 

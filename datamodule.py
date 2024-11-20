@@ -314,8 +314,8 @@ class BirdSetDataModule(HFDataModule):
                 self.train_data = load_from_disk(f"{self.save_to_disk}/train")
                 self.val_data = None
 
-                if self.hf_name != "XCM":
-                    print("no val in xcm")
+                if self.hf_name != "XCM" or self.hf_name != "XCL":
+                    print("no val in xc")
                     self.val_data = load_from_disk(f"{self.save_to_disk}/valid")
             
                 self.train_data.set_format("numpy", columns=self.columns, output_all_columns=False)
