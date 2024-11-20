@@ -6,7 +6,7 @@
 #SBATCH --partition=main
 #SBATCH --job-name=birdMAE_pretrain_XCL_scratch_mgpu_ogg
 #SBATCH --output=/mnt/work/bird2vec/logs/mgpu_ogg.log
-#SBATCH --exclude=gpu-v100-1,gpu-v100-2,gpu-v100-3,gpu-v100-4, gpu-a100-1, gpu-a100-2
+#SBATCH --exclude=gpu-v100-1,gpu-v100-2,gpu-v100-3,gpu-v100-4,gpu-a100-1,gpu-a100-2
 #####SBATCH --nodelist=gpu-a100-5
 ####SBATCH --array=3-3%3
 
