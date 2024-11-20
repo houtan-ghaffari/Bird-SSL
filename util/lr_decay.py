@@ -1,7 +1,8 @@
 import json
+import numpy as np
+from scipy.stats import norm
 
-
-def param_groups_lrd(model, weight_decay=0.05, no_weight_decay_list=[], layer_decay=.75):
+def param_groups_lrd(model, weight_decay=0.05, no_weight_decay_list=[], layer_decay=.75, decay_type="right"):
     """
     Parameter groups for layer-wise lr decay
     Following BEiT: https://github.com/microsoft/unilm/blob/master/beit/optim_factory.py#L58
@@ -11,7 +12,32 @@ def param_groups_lrd(model, weight_decay=0.05, no_weight_decay_list=[], layer_de
 
     num_layers = len(model.blocks) + 1
 
-    layer_scales = list(layer_decay ** (num_layers - i) for i in range(num_layers + 1))
+    if decay_type == "right":
+        layer_scales = list(layer_decay ** (num_layers - i) for i in range(num_layers + 1))
+    elif decay_type == "normal":
+        #center_layer = num_layers // 2
+        x = np.linspace(-3, 3, num_layers + 1)  # Adjust spread to match the required range
+        normal_dist = norm.pdf(x) / max(norm.pdf(x))  # Normalize so the max is 1
+        layer_scales = [s for s in normal_dist]  # Convert to list
+
+    elif decay_type == "inverse_normal":
+        x = np.linspace(-3, 3, num_layers + 1)  # Adjust spread to match the required range
+        normal_dist = norm.pdf(x) / max(norm.pdf(x))  # Normalize so the max is 1
+
+        inverted_dist = 1 - normal_dist  # Flip values so the middle becomes the lowest
+
+        midpoint = len(inverted_dist) // 2
+        position_counts = np.arange(1, num_layers + 1)  # Generate 1 to num_layers
+        scaling_factors = 0.75 ** position_counts[::-1]  # Reverse to start from 0.75^13
+
+        scaled_left = scaling_factors[:midpoint]  # Use appropriate portion of scaling factors
+        right = inverted_dist[midpoint-1:]  # Keep the right side unchanged
+        right[midpoint-1] += 0.1
+        right[midpoint] += 0.1
+
+        layer_scales = np.concatenate([scaled_left, right])
+
+        layer_scales = layer_scales.tolist()
 
     for n, p in model.named_parameters():
         if not p.requires_grad:

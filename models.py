@@ -2,7 +2,7 @@ import lightning as L
 import torch
 import torch.nn as nn
 import hydra
-import torchmetrics
+from torchmetrics import MetricCollection
 from timm.models.vision_transformer import PatchEmbed
 from timm.models.vision_transformer import Block
 from timm.models.swin_transformer import SwinTransformerBlock
@@ -450,7 +450,7 @@ class VIT(L.LightningModule, VisionTransformer):
                  pretrained_weights_path, 
                  target_length,
                  loss,
-                 metric,
+                 metric_cfg,
                  mask_t_prob,
                  mask_f_prob,
                  mask2d
@@ -492,6 +492,7 @@ class VIT(L.LightningModule, VisionTransformer):
         self.optimizer_cfg = optimizer.target
         self.train_batch_size = optimizer.extras.train_batch_size
         self.layer_decay = optimizer.extras.layer_decay
+        self.decay_type = optimizer.extras.decay_type
         self.scheduler_cfg = scheduler
 
         self.mask_2d = mask2d
@@ -501,10 +502,19 @@ class VIT(L.LightningModule, VisionTransformer):
         self.pretrained_weights_path = pretrained_weights_path
         self.target_length = target_length
 
-        metric = hydra.utils.instantiate(metric)
+        metric = hydra.utils.instantiate(metric_cfg)
+        
+        additional_metrics = []
+        if metric_cfg.get("additional"):
+            for _, metric_cfg in metric_cfg.additional.items():
+                additional_metrics.append(hydra.utils.instantiate(metric_cfg))
+        add_metrics = MetricCollection(additional_metrics)
+        self.test_add_metrics = add_metrics.clone()
+
         self.train_metric = metric.clone()
         self.val_metric = metric.clone()
         self.test_metric = metric.clone()
+
         self.val_predictions = []
         self.val_targets = []
         self.test_predictions = []
@@ -634,7 +644,7 @@ class VIT(L.LightningModule, VisionTransformer):
             loss = self.loss(pred, targets.float())
 
         #metric = self.val_metric(pred, targets)
-        pred = torch.softmax(pred, dim=1)
+        #pred = torch.softmax(pred, dim=1)
         self.val_predictions.append(pred.detach().cpu())
         self.val_targets.append(targets.detach().cpu())
 
@@ -673,8 +683,12 @@ class VIT(L.LightningModule, VisionTransformer):
     def on_test_epoch_end(self):
         preds = torch.cat(self.test_predictions)
         targets = torch.cat(self.test_targets)
-        metric = self.test_metric(preds, targets)
-        self.log(f'test_{self.test_metric.__class__.__name__}', metric, on_epoch=True, prog_bar=True)
+        self.test_metric(preds, targets)
+        self.log(f'test_{self.test_metric.__class__.__name__}', self.test_metric, on_epoch=True, prog_bar=True)
+
+        self.test_add_metrics(preds, targets)
+        for name, metric in self.test_add_metrics.items():
+            self.log(f'test_{name}', metric, on_epoch=True, prog_bar=True)
 
     def configure_optimizers(self):
 
@@ -688,7 +702,8 @@ class VIT(L.LightningModule, VisionTransformer):
                 model=self,
                 weight_decay=self.optimizer_cfg["weight_decay"],
                 no_weight_decay_list=self.no_weight_decay(),
-                layer_decay=self.layer_decay #scaling favtor for ech layer 0.75^layer ..--> 0.75^0
+                layer_decay=self.layer_decay, #scaling favtor for ech layer 0.75^layer ..--> 0.75^0
+                decay_type=self.decay_type
             )
 
             self.optimizer = hydra.utils.instantiate(
@@ -734,7 +749,7 @@ class VIT(L.LightningModule, VisionTransformer):
 
         if self.target_length == 512: #esc50, hsn, 5 seconds
             #num_patches = 512 # audioset
-            if "xc" in self.pretrained_weights_path:
+            if "xc" in self.pretrained_weights_path or "XCL" in self.pretrained_weights_path:
                 num_patches = 256 # birdset
             else:
                 num_patches = 512 # audioset

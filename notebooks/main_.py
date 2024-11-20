@@ -1266,3 +1266,80 @@ dataset_size_gb = dataset_size_bytes / (1024 ** 3)
 print(f"Dataset size: {dataset_size_bytes} bytes")
 print(f"Dataset size: {dataset_size_mb:.2f} MB")
 print(f"Dataset size: {dataset_size_gb:.2f} GB")
+
+
+
+#%%
+import datasets 
+
+info = datasets.load_dataset_builder("dbd-research-group/BirdSet", "XCL")
+
+#%%
+info.info.features["ebird_code"]
+
+#%%
+
+from birdset.datamodule.components.transforms import BirdSetTransformsWrapper
+import hydra
+from omegaconf import DictConfig, OmegaConf
+import os
+
+
+# Change to the project root where configs/ is located
+os.chdir("/home/lrauch/projects/birdMAE/src/birdset/")
+
+# Initialize hydra with the relative config path
+hydra.initialize(config_path="configs")  # This should be relative to the current working directory
+
+
+# Load the experiment config
+cfg = hydra.compose(config_name="experiment/birdset_neurips24/HSN/LT/convnext")
+
+# Get the transform config
+transform_cfg = cfg.data.transform
+
+# Initialize the transform
+transform = hydra.utils.instantiate(transform_cfg)
+
+
+#%%
+
+#%%
+
+from datasets import Audio
+from datasets import load_dataset 
+#dataset = load_dataset("DBD-research-group/BirdSet", "HSN")
+
+
+
+dataset = load_dataset("DBD-research-group/BirdSet", "HSN", 
+                       cache_dir="/home/lrauch/projects/birdMAE/data/HSN")
+
+#%%
+# slice example
+dataset["train"] = dataset["train"].select(range(500))
+
+# the dataset comes without an automatic Audio casting, this has to be enabled via huggingface
+# this means that each time a sample is called, it is decoded (which may take a while if done for the complete dataset)
+# in BirdSet, this is all done on-the-fly during training and testing (since the dataset size would be too big if mapping and saving it only once)
+dataset = dataset.cast_column("audio", Audio(sampling_rate=32_000))
+
+# extract the first five seconds of each sample in training (not utilizing event detection)
+# this is not very efficient since each complete audio file must be decoded this way.
+# a custom decoding with soundfile, stating start and end would be more efficient (see BirdSet Code)
+def map_first_five(sample):
+    max_length = 160_000 # 32_000hz*5sec
+    sample["audio"]["array"] =  sample["audio"]["array"][:max_length]
+    return sample
+
+# train is now available as an array that can be transformed into a spectrogram for example 
+train = dataset["train"].map(map_first_five, batch_size=1000, num_proc=2)
+
+# the test_5s dataset is already divided into 5-second chunks where each sample can have zero, one or multiple bird vocalizations (ebird_code labels)
+test = dataset["test_5s"]
+
+#%%
+
+train[0]
+
+#%%

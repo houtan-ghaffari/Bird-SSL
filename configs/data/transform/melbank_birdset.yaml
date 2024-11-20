@@ -38,8 +38,8 @@ no_call_mixer:
   sampling_rate: ${module.network.sampling_rate}
   length: 5
   
-freqm: 0
-timem: 0
+timem: 96
+freqm: 24
 
 # freqm: 48
 # timem: 192

@@ -52,7 +52,7 @@ def build_model(cfg_module: DictConfig):
             optimizer=cfg_module.optimizer,
             scheduler=cfg_module.scheduler,
             loss=cfg_module.loss,
-            metric=cfg_module.metric,
+            metric_cfg=cfg_module.metric,
             mask2d=cfg_module.network.mask2d,
             mask_t_prob=cfg_module.network.mask_t_prob,
             mask_f_prob=cfg_module.network.mask_f_prob,
