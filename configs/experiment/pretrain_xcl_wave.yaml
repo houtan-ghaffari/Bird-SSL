@@ -28,7 +28,8 @@ data:
       drop_last: true
   dataset: 
     saved_images: null
-    save_to_disk: /scratch/birdset/XCL/XCL_processed_ogg
+    #save_to_disk: /scratch/birdset/XCL/XCL_processed_ogg
+    save_to_disk: /mnt/datasets/bird_recordings/birdset_hf_download/XCL/XCL_processed_42_939daff71db5009b
     test_in_val: false
 
 
@@ -62,5 +63,5 @@ callbacks:
     save_top_k: -1
     save_on_train_epoch_end: true
 
-
+# cluster saved 500 limit, 2 events: /mnt/datasets/bird_recordings/birdset_hf_download/XCL/XCL_processed_42_939daff71db5009b
 
