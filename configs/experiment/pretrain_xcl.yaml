@@ -21,10 +21,10 @@ task_name: "pretrain_xcl" # improve this
 data:
   loaders:
     train: 
-      num_workers: 16
-      batch_size: 64
+      num_workers: 24
+      batch_size: 128
       shuffle: true
-      pin_memory: true
+      pin_memory: false
       drop_last: true
 
 logger:
