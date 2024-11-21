@@ -39,7 +39,7 @@ logger:
   experiment_name: pretrain_xcl_wave
 
 trainer:
-  max_epochs: 80
+  max_epochs: 100
   limit_val_batches: 0.0
   check_val_every_n_epoch: 1
   enable_checkpointing: true
