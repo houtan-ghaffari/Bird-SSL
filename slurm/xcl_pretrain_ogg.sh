@@ -1,13 +1,13 @@
 #!/usr/bin/zsh
 #SBATCH --mem=200gb
-#SBATCH --ntasks=4
-#SBATCH --cpus-per-task=28
-#SBATCH --gres=gpu:1
+#SBATCH --ntasks-per-node=4
+#SBATCH --cpus-per-task=24
+#SBATCH --gres=gpu:4
 #SBATCH --partition=main
-#SBATCH --nodes=1-4
 #SBATCH --job-name=birdMAE_pretrain_XCL_scratch_mgpu_ogg4
 #SBATCH --output=/mnt/work/bird2vec/logs/mgpu_ogg4.log
-#SBATCH --exclude=gpu-v100-1,gpu-v100-2,gpu-v100-3,gpu-v100-4
+########SBATCH --exclude=gpu-v100-1,gpu-v100-2,gpu-v100-3,gpu-v100-4
+#SBATCH --exclude=gpu-v100-3
 #SBATCH --time=48:00:00  # Specify a 2-hour time limit
 
 ######,gpu-a100-1,gpu-a100-2

@@ -24,6 +24,6 @@ export HYDRA_FULL_ERROR=1
 
 SEED=$SLURM_ARRAY_TASK_ID
 
-srun python train_ssl.py experiment=pretrain_xcl.yaml
+srun python train_ssl.py experiment=pretrain_xcl.yaml trainer.devices=$SLURM_GPUS_ON_NODE
 
 echo "Finished script."

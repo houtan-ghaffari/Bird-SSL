@@ -8,5 +8,6 @@ target:
 extras:
   train_batch_size: ${data.loaders.train.batch_size}
   layer_decay: 0.75
+  decay_type: right
 
 

@@ -35,3 +35,5 @@ module:
       lr: 1e-3
     extras:
       layer_decay: 0.75
+  network:
+    pretrained_weights_path: ${paths.root_dir}/weights/amae_as2m_pretrained.pth
