@@ -425,12 +425,21 @@ class BirdSetTrainTransform(TrainTransform):
 
         #waveform augmentations
         if self.wave_aug:
-            output_dict = self.wave_aug(
-                waveform_batch["input_values"].unsqueeze(1), 
-                sample_rate=self.sampling_rate, 
-                targets=torch.Tensor(batch[self.columns[1]]).unsqueeze(1).unsqueeze(1))
-            waveform_batch["input_values"] = output_dict["samples"].squeeze(1)
-            batch[self.columns[1]] = output_dict["targets"].squeeze(1).squeeze(1)
+
+            if self.transform_params.get("pretrain") is None: #if fine-tuning
+                output_dict = self.wave_aug(
+                    waveform_batch["input_values"].unsqueeze(1), 
+                    sample_rate=self.sampling_rate, 
+                    targets=torch.Tensor(batch[self.columns[1]]).unsqueeze(1).unsqueeze(1))
+                waveform_batch["input_values"] = output_dict["samples"].squeeze(1)
+                batch[self.columns[1]] = output_dict["targets"].squeeze(1).squeeze(1)
+            
+            else: # if pre-training
+                output_dict = self.wave_aug(
+                    waveform_batch["input_values"].unsqueeze(1), 
+                    sample_rate=self.sampling_rate, 
+                    targets=None)
+                waveform_batch["input_values"] = output_dict["samples"].squeeze(1)
 
         if self.no_call_mixer:
             waveform_batch["input_values"], batch[self.columns[1]] = self.no_call_mixer(
@@ -460,56 +469,14 @@ class BirdSetTrainTransform(TrainTransform):
 
         fbank_features = (fbank_features - self.mean) / (self.std * 2) # need: batch, 1024, 128
 
-        return {
-            "audio": fbank_features.unsqueeze(1), # batch, 1, 1024, 128
-            "label": torch.Tensor(batch[self.columns[1]]),
+        if self.transform_params.get("pretrain"):
+            return {
+                "audio": fbank_features.unsqueeze(1), # batch, 1, 1024, 128
+            }
+        else:
+            return {
+                "audio": fbank_features.unsqueeze(1), # batch, 1, 1024, 128
+                "label": torch.Tensor(batch[self.columns[1]]),
         }
     
-    def _load_audio_birdset(sample, min_len=5, max_len=5, sampling_rate=32_000):
-        path = sample["filepath"]
-        start = sample["detected_events"][0]
-        end = sample["detected_events"][1]
-
-        file_info = sf.info(path)
-        sr = file_info.samplerate
-        total_duration = file_info.duration
-
-        if start is not None and end is not None:
-            event_duration = end - start
-            
-            if event_duration < min_len:
-                # Calculate how much we need to extend on each side
-                extension = (min_len - event_duration) / 2
-                
-                # Try to extend equally on both sides
-                new_start = max(0, start - extension)
-                new_end = min(total_duration, end + extension)
-                
-                # If we couldn't extend fully on one side, try to extend more on the other side
-                if new_start == 0:
-                    new_end = min(total_duration, new_end + (start - new_start))
-                elif new_end == total_duration:
-                    new_start = max(0, new_start - (new_end - end))
-                
-                start, end = new_start, new_end
-
-            if end - start > max_len:
-                # If longer than max_len, take the first 5 seconds of the event
-                end = min(start + 5, total_duration)
-                if end - start > max_len:
-                    end = start + max_len
-
-            start, end = int(start * sr), int(end * sr)
-        else:
-            # If start and end are not provided, load the first max_len seconds
-            start, end = 0, int(min(max_len, total_duration) * sr)
-
-        audio, sr = sf.read(path, start=start, stop=end)
-
-        if audio.ndim != 1:
-            audio = audio.swapaxes(1, 0)
-            audio = librosa.to_mono(audio)
-        if sr != sampling_rate:
-            audio = librosa.resample(audio, orig_sr=sr, target_sr=sampling_rate)
-            sr = sampling_rate
-        return audio, sr
+    

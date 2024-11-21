@@ -303,7 +303,7 @@ class AudioMAE(L.LightningModule):
 
     def training_step(self, batch, batch_idx):
         audio = batch["audio"]
-        labels = batch["label"]
+        #labels = batch["label"]
         loss, pred, mask = self(audio)
         self.log('train_loss', loss, on_step=True, on_epoch=True, prog_bar=True)
         return loss

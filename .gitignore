@@ -2,9 +2,9 @@
 /data/
 /lightning_logs/
 /logs/
-/__pycache__/
+__pycache__/
 *.pyc
 /*.pyc
 /weights/
-/__pycache
+/__pycache__/
 
