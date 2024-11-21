@@ -1,8 +1,8 @@
 #!/usr/bin/zsh
 #SBATCH --mem=200gb
-#SBATCH --ntasks-per-node=4
+#SBATCH --ntasks-per-node=2
 #SBATCH --cpus-per-task=28
-#SBATCH --gres=gpu:4
+#SBATCH --gres=gpu:2
 #SBATCH --partition=main
 #SBATCH --job-name=birdMAE_pretrain_XCL_scratch_mgpu_ogg
 #SBATCH --output=/mnt/work/bird2vec/logs/mgpu_ogg.log
