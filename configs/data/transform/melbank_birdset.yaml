@@ -19,28 +19,28 @@ waveform_augmentations:
     mix_target: union
     max_samples: 2 
 
-  # colored_noise:
-  #   _target_: torch_audiomentations.AddColoredNoise
-  #   p: 0.2
-  #   min_snr_in_db: 5.0
-  #   max_snr_in_db: 20.0
-  #   max_f_decay: 0
-  #   min_f_decay: -2
+  colored_noise:
+    _target_: torch_audiomentations.AddColoredNoise
+    p: 0.2
+    min_snr_in_db: 5.0
+    max_snr_in_db: 20.0
+    max_f_decay: 0
+    min_f_decay: -2
 
-  # background_noise:
-  #   _target_: birdset.datamodule.components.augmentations.AddBackgroundNoise
-  #   p: 0.5
-  #   min_snr_in_db: 5.0
-  #   max_snr_in_db: 15.0
-  #   sample_rate: ${module.network.sampling_rate}
-  #   target_rate: ${module.network.sampling_rate}
-  #   background_paths: ${paths.background_dir}
+  background_noise:
+    _target_: birdset.datamodule.components.augmentations.AddBackgroundNoise
+    p: 0.5
+    min_snr_in_db: 5.0
+    max_snr_in_db: 15.0
+    sample_rate: ${module.network.sampling_rate}
+    target_rate: ${module.network.sampling_rate}
+    background_paths: ${paths.background_dir}
 
-no_call_mixer: null
-  # directory: ${paths.background_dir}
-  # p: 0.0
-  # sampling_rate: ${module.network.sampling_rate}
-  # length: 5
+no_call_mixer: 
+  directory: ${paths.background_dir}
+  p: 0.0
+  sampling_rate: ${module.network.sampling_rate}
+  length: 5
   
 # timem: 96
 # freqm: 24

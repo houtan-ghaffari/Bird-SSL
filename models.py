@@ -312,7 +312,7 @@ class AudioMAE(L.LightningModule):
         pass
 
     def configure_optimizers(self):
-        eff_batch_size = self.trainer.accumulate_grad_batches * self.trainer.num_devices * self.train_batch_size
+        eff_batch_size = self.trainer.accumulate_grad_batches * self.trainer.num_devices * self.train_batch_size * self.trainer.num_nodes
         print("base learning rate on 256 was:", self.optimizer_cfg["lr"])
         self.optimizer_cfg["lr"] = self.optimizer_cfg["lr"] * eff_batch_size / 256
         print("effective learning rate now:", self.optimizer_cfg["lr"], self.layer_decay)

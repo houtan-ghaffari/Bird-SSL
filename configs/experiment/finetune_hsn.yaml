@@ -32,7 +32,7 @@ data:
 
     
 trainer:
-  max_epochs: 50
+  max_epochs: 60
   limit_val_batches: 1.0
   check_val_every_n_epoch: 2
   gradient_clip_val: 0.3
@@ -51,5 +51,5 @@ module:
       weight_decay: 1e-2
     extras:
       layer_decay: 0.75
-      decay_type: inverse_normal
+      decay_type: right
 

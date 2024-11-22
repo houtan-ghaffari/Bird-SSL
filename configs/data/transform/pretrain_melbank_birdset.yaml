@@ -13,7 +13,7 @@ mixup:
 waveform_augmentations: 
   mixup_wave:
     _target_: birdset.datamodule.components.augmentations.MultilabelMix
-    p: 0.5
+    p: 0.3
     min_snr_in_db: 5.0
     max_snr_in_db: 25.0
     mix_target: union
@@ -31,6 +31,5 @@ timem: 0
 mask2d: false
 mask_t_prob: 0.0
 mask_f_prob: 0.0
-
 
 pretrain: true
