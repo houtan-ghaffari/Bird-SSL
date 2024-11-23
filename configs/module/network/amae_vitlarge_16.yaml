@@ -1,5 +1,5 @@
 
-name: AudioMAE_L
+name: AudioMAE
 norm_layer: nn.LayerNorm
 norm_pix_loss: True
 sampling_rate: 32_000
