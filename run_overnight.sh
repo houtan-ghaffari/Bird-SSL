@@ -1,10 +1,19 @@
 #!/bin/bash
 
 # Define the learning rates you want to try
-learning_rates=(5e-3 3e-3 1e-3 5e-4 3e-4 1e-4 5e-5 3e-5 1e-5)
+learning_rates=(1e-3 5e-4 4e-4 3e-4 2e-4 1e-4 5e-5 3e-5 2e-5 1e-5)
 
 # Iterate over the learning rates and run the experiment
 for lr in "${learning_rates[@]}"; do
   echo "Running experiment with lr=${lr}"
-  python finetune.py experiment=finetune_hsn.yaml module.optimizer.target.lr=$lr
+  
+  # Convert the learning rate to a float for comparison
+  lr_float=$(printf "%.10f" "$lr")
+
+  # Compare the learning rate directly
+  if (( $(echo "$lr_float < 0.0001" | awk '{print ($1 < $2)}') )); then
+    python finetune.py experiment=finetune_hsn.yaml module.optimizer.target.lr=$lr trainer.max_epochs=80
+  else
+    python finetune.py experiment=finetune_hsn.yaml module.optimizer.target.lr=$lr
+  fi
 done

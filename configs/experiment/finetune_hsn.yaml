@@ -21,7 +21,7 @@ train: true
 test: true
 
 logger:
-  experiment_name: birdset_repr
+  experiment_name: overnight_hsn
 
 data:
   loaders:
@@ -35,7 +35,7 @@ trainer:
   max_epochs: 60
   limit_val_batches: 1.0
   check_val_every_n_epoch: 2
-  gradient_clip_val: 0.3
+  gradient_clip_val: 0.1
   precision: 16-mixed
 
 
@@ -45,10 +45,10 @@ module:
       #lr: 5e-5
       #lr: 3e-4
       #lr: 1e-3
-      lr: 2e-4
+      lr: 5e-4
       #lr: 5e-4
       #lr: 1e-4S
-      weight_decay: 1e-2
+      weight_decay: 3e-2
     extras:
       layer_decay: 0.75
       decay_type: right
