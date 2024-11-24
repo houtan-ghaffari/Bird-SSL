@@ -15,12 +15,12 @@ depth: 12
 drop_path: 0.1
 num_classes: ${data.dataset.num_classes} 
 pos_trainable: False
-pretrained_weights_path: /home/lrauch/AudioMAE_XCL_epoch=39.ckpt
+#pretrained_weights_path: /home/lrauch/AudioMAE_XCL_epoch=39.ckpt
 #pretrained_weights_path: /home/lrauch/mnt_check/pretrain_xcl/runs/XCL/AudioMAE/2024-11-11_204649/callback_checkpoints/AudioMAE_XCL_epoch=64.ckpt
 #pretrained_weights_path: /home/lrauch/mnt_check/pretrain_xcl/runs/XCL/AudioMAE/2024-11-11_204649/callback_checkpoints/AudioMAE_XCL_epoch=39.ckpt
 
 #pretrained_weights_path: /home/lrauch/mnt_check/pretrain_xcl/runs/XCL/AudioMAE/2024-11-11_204649/callback_checkpoints/AudioMAE_XCL_epoch=74.ckpt
-#pretrained_weights_path: /home/lrauch/AudioMAE_XCL_epoch=74.ckpt
+pretrained_weights_path: /home/lrauch/AudioMAE_XCL_epoch=74.ckpt
 #pretrained_weights_path: /home/lrauch/AudioMAE_XCL_epoch=64.ckpt
 #pretrained_weights_path: /home/lrauch/AudioMAE_XCL_epoch=29_mixup.ckpt
 #pretrained_weights_path: /home/lrauch/AudioMAE_XCL_epoch=34mixup_2024-11-21_103243.ckpt
