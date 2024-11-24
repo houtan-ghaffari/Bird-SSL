@@ -32,10 +32,11 @@ export HYDRA_FULL_ERROR=1
 NUM_GPUS=$SLURM_GPUS_ON_NODE
 
 hostname
-srun python train_ssl.py experiment=pretrain_xcl_wave_large.yaml \
+srun python train_ssl.py \
+        experiment=pretrain_xcl_wave_large.yaml \
+        experiment.ckpt_path="ckpt_path="/mnt/work/bird2vec/logs_pretrain_audioset_MAE/pretrain_xcl_wave_large/runs/XCL/AudioMAE/2024-11-23_123703/callback_checkpoints/last.ckpt"
         trainer.devices=2 \
         +trainer.num_nodes=1 \
         trainer.precision=bf16 \
-        ckpt_path="/mnt/work/bird2vec/logs_pretrain_audioset_MAE/pretrain_xcl_wave_large/runs/XCL/AudioMAE/2024-11-23_123703/callback_checkpoints/last.ckpt"
 
 echo "Finished script."
