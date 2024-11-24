@@ -20,3 +20,4 @@ defaults:
 seed: 42
 start_time: ${now:%Y-%m-%d_%H%M%S}
 task_name: "pretrain_asb"
+ckpt_path: null

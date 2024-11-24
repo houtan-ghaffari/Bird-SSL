@@ -72,7 +72,8 @@ def train(cfg: DictConfig):
     callbacks = instantiate_callbacks(cfg["callbacks"])
                                       
     log.info("Setup trainer")
-    trainer = L.Trainer(**cfg.trainer, callbacks=callbacks, logger=logger)
+    ckpt_path = cfg.get("ckpt_path", None)
+    trainer = L.Trainer(**cfg.trainer, callbacks=callbacks, logger=logger, ckpt_path=ckpt_path)
 
     log.info("Setup model")
     model = build_model(cfg.module)

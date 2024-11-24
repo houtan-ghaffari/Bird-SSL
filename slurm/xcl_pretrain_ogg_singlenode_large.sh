@@ -5,10 +5,10 @@
 #SBATCH --gres=gpu:2
 #SBATCH --mem=128gb
 #SBATCH --partition=main
-#SBATCH --job-name=birdMAE_pretrain_XCL_scratch_mgpu_ogg_2large
-#SBATCH --output=/mnt/work/bird2vec/logs/mgpu_ogg2large_%N_%t.log
+#SBATCH --job-name=birdMAE_pretrain_XCL_scratch_mgpu_ogg_2_reslarge
+#SBATCH --output=/mnt/work/bird2vec/logs/mgpu_ogg2large_%N_%t_resume.log
 #SBATCH --time=48:00:00
-#BATCH --nodelist=gpu-a100-5
+#SBATCH --nodelist=gpu-a100-5
 
 ####SBATCH --exclude=gpu-v100-1,gpu-v100-2,gpu-v100-3,gpu-v100-4,gpu-a100-4
 
@@ -35,6 +35,7 @@ hostname
 srun python train_ssl.py experiment=pretrain_xcl_wave_large.yaml \
         trainer.devices=2 \
         +trainer.num_nodes=1 \
-        trainer.precision=bf16
+        trainer.precision=bf16 \
+        ckpt_path="/mnt/work/bird2vec/logs_pretrain_audioset_MAE/pretrain_xcl_wave_large/runs/XCL/AudioMAE/2024-11-23_123703/callback_checkpoints/last.ckpt"
 
 echo "Finished script."
