@@ -72,8 +72,7 @@ def train(cfg: DictConfig):
     callbacks = instantiate_callbacks(cfg["callbacks"])
                                       
     log.info("Setup trainer")
-    ckpt_path = cfg.get("ckpt_path", None)
-    trainer = L.Trainer(**cfg.trainer, callbacks=callbacks, logger=logger, ckpt_path=ckpt_path)
+    trainer = L.Trainer(**cfg.trainer, callbacks=callbacks, logger=logger)
 
     log.info("Setup model")
     model = build_model(cfg.module)
@@ -90,7 +89,9 @@ def train(cfg: DictConfig):
         log_hyperparameters(object_dict)
 
     log.info("Start training")
-    trainer.fit(model=model, datamodule=datamodule)
+    ckpt_path = cfg.get("ckpt_path", None)
+    print(f"Loading from checkpoint: {ckpt_path}")
+    trainer.fit(model=model, datamodule=datamodule, ckpt_path=ckpt_path)
 
 if __name__ == "__main__":
     train()
