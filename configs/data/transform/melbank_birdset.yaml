@@ -38,7 +38,7 @@ waveform_augmentations:
 
 no_call_mixer: 
   directory: ${paths.background_dir}
-  p: 0.0
+  p: 0.075
   sampling_rate: ${module.network.sampling_rate}
   length: 5
   

@@ -71,7 +71,13 @@ def finetune(cfg: DictConfig):
     if pretrained_weights_path: 
         log.info(f"Load pretrained weights from {pretrained_weights_path}")
         model.load_pretrained_weights(pretrained_weights_path, cfg.data.dataset.name)
-    
+
+    if cfg.module.network.get("freeze_backbone", False):
+        log.info("Freezing backbone weights, only training head")
+        for name, param in model.named_parameters():
+            if 'head' not in name:
+                param.requires_grad = False
+                
     object_dict = {
         "cfg": cfg, 
         "datamodule": datamodule,
