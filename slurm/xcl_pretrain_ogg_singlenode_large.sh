@@ -6,8 +6,8 @@
 #SBATCH --mem=128gb
 #SBATCH --partition=main
 #SBATCH --job-name=birdMAE_pretrain_XCL_scratch_mgpu_ogg_2_largebirdsetspec
-#SBATCH --output=/mnt/work/bird2vec/logs/mgpu_l40_birdsetspe_%N_%t_resume.log
-#SBATCH --time=72:00:00
+#SBATCH --output=/mnt/work/bird2vec/logs/mgpu_l40_birdsetspec_large_%N_%t_.log
+#SBATCH --time=96:00:00
 #SBATCH --nodelist=gpu-l40s-1
 
 ####SBATCH --exclude=gpu-v100-1,gpu-v100-2,gpu-v100-3,gpu-v100-4,gpu-a100-4

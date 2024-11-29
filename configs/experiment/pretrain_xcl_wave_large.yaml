@@ -23,7 +23,7 @@ data:
   loaders:
     train: 
       num_workers: 24
-      batch_size: 64 # change to 128 if two gpus
+      batch_size: 48 # change to 128 if two gpus
       shuffle: true
       pin_memory: false
       drop_last: true
@@ -32,8 +32,6 @@ data:
     #save_to_disk: /scratch/birdset/XCL/XCL_processed_ogg
     save_to_disk: /scratch/birdset/XCL/XCL_processed_500_2events_ogg
     test_in_val: false
-
-
 
 
 logger:
