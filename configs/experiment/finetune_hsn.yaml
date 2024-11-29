@@ -52,8 +52,8 @@ module:
       #lr: 5e-4
       #lr: 1e-4S
       #weight_decay: 3e-2
-      weight_decay: 3e-4
+      weight_decay: 3e-3
     extras:
-      layer_decay: 0.65
-      decay_type: right
+      layer_decay: 0.75
+      decay_type: inverse_normal
 

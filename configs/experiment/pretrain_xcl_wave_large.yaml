@@ -23,7 +23,7 @@ data:
   loaders:
     train: 
       num_workers: 24
-      batch_size: 128
+      batch_size: 64 # change to 128 if two gpus
       shuffle: true
       pin_memory: false
       drop_last: true
