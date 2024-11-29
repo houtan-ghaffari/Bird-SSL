@@ -65,18 +65,22 @@ def finetune(cfg: DictConfig):
     log.info("Setup model")
     model = build_model(cfg.module)
 
-    pretrained_weights_path = cfg.module.network.pretrained_weights_path
-    #pretrained_weights_path = None
+    pretrained_weights_path = cfg.module.network.get("pretrained_weights_path", None)
 
     if pretrained_weights_path: 
         log.info(f"Load pretrained weights from {pretrained_weights_path}")
         model.load_pretrained_weights(pretrained_weights_path, cfg.data.dataset.name)
 
-    if cfg.module.network.get("freeze_backbone", False):
+    if cfg.module.network.get("freeze_backbone", False): # move this to the models!
         log.info("Freezing backbone weights, only training head")
-        for name, param in model.named_parameters():
-            if 'head' not in name:
-                param.requires_grad = False
+        if cfg.module.network.name == "ConvNext":
+             for name, param in model.named_parameters():
+                if 'classifier' not in name:
+                    param.requires_grad = False
+        else:
+            for name, param in model.named_parameters():
+                if 'head' not in name:
+                    param.requires_grad = False
                 
     object_dict = {
         "cfg": cfg, 

@@ -1,4 +1,5 @@
-fbank:
+input:
+  type: fbank
   htk_compat: true
   sample_frequency: ${module.network.sampling_rate}
   use_energy: false
@@ -6,6 +7,15 @@ fbank:
   num_mel_bins: 128
   dither: 0.0
   frame_shift: 10 
+  
+# input:
+#   type: birdset
+#   n_fft: 1024
+#   hop_length: 320
+#   power: 2.0
+#   n_mels: 128
+#   sample_rate: ${module.network.sampling_rate}
+#   n_stft: 513
 
 mixup:
   prob: 0.0 

@@ -1,6 +1,6 @@
 import hydra
 from omegaconf import DictConfig, OmegaConf
-from models import AudioMAE, VIT
+from models import AudioMAE, VIT, ConvNext
 from util import pylogger
 import lightning as L
 log = pylogger.get_pylogger(__name__)
@@ -57,7 +57,17 @@ def build_model(cfg_module: DictConfig):
             mask_t_prob=cfg_module.network.mask_t_prob,
             mask_f_prob=cfg_module.network.mask_f_prob,
         )
-
+    elif cfg_module.network.name == "ConvNext":
+        module = ConvNext(
+            num_channels=cfg_module.network.num_channels,
+            num_classes=cfg_module.network.num_classes,
+            hf_checkpoint=cfg_module.network.hf_checkpoint,
+            model_dir=cfg_module.network.model_dir,
+            optimizer=cfg_module.optimizer,
+            scheduler=cfg_module.scheduler,
+            loss=cfg_module.loss,
+            metric_cfg=cfg_module.metric  
+        )
     else:
         raise ValueError(f"Model {cfg_module.network.name} not found")
 

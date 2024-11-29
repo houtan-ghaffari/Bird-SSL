@@ -4,14 +4,17 @@ import hydra
 from transformers.audio_utils import spectrogram, window_function, mel_filter_bank
 from omegaconf import DictConfig
 import torch 
+import torchvision
 import torch.nn.functional as F
 import torch_audiomentations
 from birdset.datamodule.components.event_decoding import EventDecoding
 from birdset.datamodule.components.augmentations import MultilabelMix, AddBackgroundNoise, NoCallMixer
+from birdset.datamodule.components.augmentations import PowerToDB
 from torch_audiomentations import AddColoredNoise
 
 from torchaudio.compliance.kaldi import fbank
 from torchaudio.transforms import FrequencyMasking, TimeMasking
+from torchaudio.transforms import Spectrogram, MelScale
 from typing import Any, List, Optional, Union
 
 import numpy as np
@@ -46,7 +49,8 @@ class BaseTransform:
 
         self.columns = columns
         self.clip_duration = clip_duration
-        self.fbank_params = transform_params.fbank
+        #self.fbank_params = transform_params.fbank
+        self.input_params = transform_params.input
         self.transform_params = transform_params
 
         self.feature_extractor = DefaultFeatureExtractor(
@@ -73,6 +77,19 @@ class BaseTransform:
         
         self.event_decoder = EventDecoding(min_len=5, max_len=5, sampling_rate=self.sampling_rate)
 
+        if self.input_params.type == "birdset":
+            self.spectrogram_conversion = Spectrogram(
+                n_fft=self.input_params.n_fft, 
+                hop_length=self.input_params.hop_length, 
+                power=self.input_params.power)
+            self.melscale_conversion = MelScale(
+                n_mels=self.input_params.n_mels, 
+                sample_rate=self.sampling_rate, 
+                n_stft=self.input_params.n_stft)
+            self.dbscale_conversion = PowerToDB()
+    
+
+
     def _process_waveforms(self, waveforms):
         max_length = int(int(self.sampling_rate) * self.clip_duration)
         waveform_batch = self.feature_extractor(
@@ -91,18 +108,25 @@ class BaseTransform:
         fbank_features = [
             fbank(
                 waveform.unsqueeze(0),
-                htk_compat=self.fbank_params.htk_compat,
+                htk_compat=self.input_params.htk_compat,
                 sample_frequency=self.sampling_rate,
-                use_energy=self.fbank_params.use_energy,
-                window_type=self.fbank_params.window_type,
-                num_mel_bins=self.fbank_params.num_mel_bins,
-                dither=self.fbank_params.dither,
-                frame_shift=self.fbank_params.frame_shift
+                use_energy=self.input_params.use_energy,
+                window_type=self.input_params.window_type,
+                num_mel_bins=self.input_params.num_mel_bins,
+                dither=self.input_params.dither,
+                frame_shift=self.input_params.frame_shift
             )
             for waveform in waveforms
         ]
         return torch.stack(fbank_features)
-    
+
+    def _compute_birdset_features(self, waveforms):
+        spectrograms = self.spectrogram_conversion(waveforms)
+        spectrograms = self.melscale_conversion(spectrograms)
+        fbank_features = self.dbscale_conversion(spectrograms).permute(0, 2, 1) # batch, 128, 501 --> batch, 501, 128
+        return fbank_features
+
+
     def _pad_and_normalize(self, fbank_features):
         difference = self.target_length - fbank_features[0].shape[0]
         min_value = fbank_features.min()
@@ -126,7 +150,13 @@ class BaseTransform:
             waveform_batch = self.event_decoder(batch)
             waveform_batch = [audio["array"] for audio in batch["audio"]]
         waveform_batch = self._process_waveforms(waveform_batch)
-        fbank_features = self._compute_fbank_features(waveform_batch["input_values"])
+
+        if self.input_params.type == "birdset":
+            fbank_features = self._compute_birdset_features(waveform_batch["input_values"])
+        
+        elif self.input_params.type == "fbank":
+            fbank_features = self._compute_fbank_features(waveform_batch["input_values"])     
+
         fbank_features = self._pad_and_normalize(fbank_features)
         fbank_features = (fbank_features - self.mean) / (self.std * 2)
         return {
@@ -412,6 +442,15 @@ class BirdSetTrainTransform(TrainTransform):
             self.wave_aug = torch_audiomentations.Compose(wave_augs, output_type="object_dict")
         else:
             self.wave_aug = None
+        
+        if self.transform_params.get("spectrogram_augmentations"):
+            spec_augs = []
+            for names, augs in self.transform_params.spectrogram_augmentations.items():
+                spec_augs.append(hydra.utils.instantiate(augs))
+
+            self.spec_aug = torchvision.transforms.Compose(transforms=spec_augs)
+        else:
+            self.spec_aug = None
 
     def __call__(self, batch):
         try:
@@ -434,7 +473,7 @@ class BirdSetTrainTransform(TrainTransform):
                 waveform_batch["input_values"] = output_dict["samples"].squeeze(1)
                 batch[self.columns[1]] = output_dict["targets"].squeeze(1).squeeze(1)
             
-            else: # if pre-training
+            else: # if pre-training, no labels used
                 output_dict = self.wave_aug(
                     waveform_batch["input_values"].unsqueeze(1), 
                     sample_rate=self.sampling_rate, 
@@ -446,8 +485,24 @@ class BirdSetTrainTransform(TrainTransform):
                 waveform_batch["input_values"], 
                 batch[self.columns[1]])
             
-        fbank_features = self._compute_fbank_features(waveform_batch["input_values"])
+        if self.input_params.type == "birdset":
+            fbank_features = self._compute_birdset_features(waveform_batch["input_values"])
+        
+        elif self.input_params.type == "fbank":
+            fbank_features = self._compute_fbank_features(waveform_batch["input_values"])
+        
+        else:
+            raise ValueError("Invalid input type for BirdSetTrainTransform")
 
+        if self.spec_aug: # normally in birdset on the spectrograms, not on the fbanks at the end.
+            fbank_features = self.spec_aug(fbank_features.permute(0,2,1))
+            fbank_features = fbank_features.permute(0,2,1)
+
+
+        if self.spec_aug:
+            fbank_features = self.spec_aug(fbank_features.permute(0,2,1))
+            fbank_features = fbank_features.permute(0,2,1)
+     
         # self.mixup_fn = SpecMixupN(
         #     num_mix=2,
         #     min_snr_in_db=5.0,

@@ -28,7 +28,7 @@ def param_groups_lrd(model, weight_decay=0.05, no_weight_decay_list=[], layer_de
 
         midpoint = len(inverted_dist) // 2
         position_counts = np.arange(1, num_layers + 1)  # Generate 1 to num_layers
-        scaling_factors = 0.75 ** position_counts[::-1]  # Reverse to start from 0.75^13
+        scaling_factors = layer_decay ** position_counts[::-1]  # Reverse to start from 0.75^13
 
         scaled_left = scaling_factors[:midpoint]  # Use appropriate portion of scaling factors
         right = inverted_dist[midpoint-1:]  # Keep the right side unchanged

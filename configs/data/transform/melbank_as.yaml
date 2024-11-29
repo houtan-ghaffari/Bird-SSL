@@ -1,4 +1,5 @@
-fbank:
+input:
+  type: fbank
   htk_compat: true
   sample_frequency: ${module.network.sampling_rate}
   use_energy: false
