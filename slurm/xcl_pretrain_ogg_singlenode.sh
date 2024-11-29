@@ -9,9 +9,9 @@
 #SBATCH --output=/mnt/work/bird2vec/logs/mgpu_birdset_spec_%N_%t.log
 #SBATCH --time=60:00:00
 ###SBATCH --exclude=gpu-v100-3
-#SBATCH --nodelist=gpu-a100-5
+####SBATCH --nodelist=gpu-a100-5
 
-########SBATCH --exclude=gpu-v100-1,gpu-v100-2,gpu-v100-3,gpu-v100-4
+#SBATCH --exclude=gpu-v100-1,gpu-v100-2,gpu-v100-3,gpu-v100-4
 ######,gpu-a100-1,gpu-a100-2
 #####SBATCH --nodelist=gpu-a100-5
 ####SBATCH --array=3-3%3

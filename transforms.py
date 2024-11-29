@@ -464,7 +464,6 @@ class BirdSetTrainTransform(TrainTransform):
 
         #waveform augmentations
         if self.wave_aug:
-
             if self.transform_params.get("pretrain") is None: #if fine-tuning
                 output_dict = self.wave_aug(
                     waveform_batch["input_values"].unsqueeze(1), 

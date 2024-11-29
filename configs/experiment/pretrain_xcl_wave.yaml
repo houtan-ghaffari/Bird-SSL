@@ -31,6 +31,8 @@ data:
     #save_to_disk: /scratch/birdset/XCL/XCL_processed_ogg
     save_to_disk: /scratch/birdset/XCL/XCL_processed_500_2events_ogg
     test_in_val: false
+    mean: -4.268 # REMOVE IF OTHER INPUT!!!!!
+    std: 4.569
 
 
 
