@@ -3,10 +3,10 @@
 #SBATCH --ntasks-per-node=4
 #SBATCH --cpus-per-task=26
 #SBATCH --gres=gpu:4
-#SBATCH --mem=128gb
+#SBATCH --mem=164gb
 #SBATCH --partition=main
-#SBATCH --job-name=birdMAE_pretrain_XCL_scratch_mgpu_ogg_2_largebirdsetspec
-#SBATCH --output=/mnt/work/bird2vec/logs/mgpu_l40_birdsetspec_large_%N_%t_.log
+#SBATCH --job-name=birdMAE_pretrain_XCL_scratch_4_moremixup
+#SBATCH --output=/mnt/work/bird2vec/logs/mgpu_l40_moremixup_large_%N_%t_.log
 #SBATCH --time=96:00:00
 #SBATCH --nodelist=gpu-l40s-1
 

@@ -23,10 +23,11 @@ data:
   loaders:
     train: 
       num_workers: 24
-      batch_size: 48 # change to 128 if two gpus
+      batch_size: 64 # change to 128 if two gpus
       shuffle: true
-      pin_memory: false
+      pin_memory: true
       drop_last: true
+      prefetch_factor: 2
   dataset: 
     saved_images: null
     #save_to_disk: /scratch/birdset/XCL/XCL_processed_ogg
