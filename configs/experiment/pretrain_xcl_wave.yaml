@@ -3,7 +3,7 @@ defaults:
   - override /callbacks: default_ssl
   - override /data/dataset: XCL
   - override /data/loaders: audioset_balanced
-  - override /data/transform: pretrain_melbank_birdset
+  - override /data/transform: pretrain_melbank_birdset_birdsetspec
   - override /logger: mlflow
   - override /module/network: amae_vitbase_16
   - override /module/optimizer: adamw
@@ -29,8 +29,8 @@ data:
   dataset: 
     saved_images: null
     #save_to_disk: /scratch/birdset/XCL/XCL_processed_ogg
-    #save_to_disk: /scratch/birdset/XCL/XCL_processed_500_2events_ogg
-    save_to_disk: /mnt/datasets/bird_recordings/birdset_hf_download/XCL/XCL_processed_500_2events_ogg
+    save_to_disk: /scratch/birdset/XCL/XCL_processed_500_2events_ogg
+    #save_to_disk: /mnt/datasets/bird_recordings/birdset_hf_download/XCL/XCL_processed_500_2events_ogg
     test_in_val: false
     mean: -4.268 # REMOVE IF OTHER INPUT!!!!!
     std: 4.569

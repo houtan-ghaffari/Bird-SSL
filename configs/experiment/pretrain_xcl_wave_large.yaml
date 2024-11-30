@@ -3,7 +3,7 @@ defaults:
   - override /callbacks: default_ssl
   - override /data/dataset: XCL
   - override /data/loaders: audioset_balanced
-  - override /data/transform: pretrain_melbank_birdset_birdsetspec
+  - override /data/transform: pretrain_melbank_birdset
   - override /logger: mlflow
   - override /module/network: amae_vitlarge_16
   - override /module/optimizer: adamw
