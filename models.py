@@ -301,6 +301,13 @@ class AudioMAE(L.LightningModule):
         loss = self.forward_loss(imgs, pred, mask)
         return loss, pred, mask
 
+    def on_train_epoch_start(self):
+        import psutil
+        memory = psutil.virtual_memory() 
+        memory_percent = memory.percent
+        memory_used = memory.used / (1024**3) # GB
+        print(f"Epcch starts. RAM Usage: {memory_percent}% ({memory_used:.2f} GB)")
+
     def training_step(self, batch, batch_idx):
         audio = batch["audio"]
         #labels = batch["label"]
@@ -622,7 +629,6 @@ class VIT(L.LightningModule, VisionTransformer):
             loss = self.loss(pred, targets.float())
         self.log('train_loss', loss, on_step=True, on_epoch=True, prog_bar=True)
         return loss
-    
 
     def validation_step(self, batch, batch_idx):
         audio = batch["audio"]

@@ -1,7 +1,7 @@
 # @package _global_
 defaults:
   - override /callbacks: default_ssl
-  - override /data/dataset: XCL
+  - override /data/dataset: XCM
   - override /data/loaders: audioset_balanced
   - override /data/transform: pretrain_melbank_birdset
   - override /logger: mlflow
@@ -9,42 +9,41 @@ defaults:
   - override /module/optimizer: adamw
   - override /module/scheduler: cosine
   - override /module/loss: binary_cross_entropy # remove this or improve
-  - override /paths: cluster
-  #- override /trainer: single_gpu
-  - override /trainer: multi_gpu
+  - override /paths: workstation
+  - override /trainer: single_gpu
+  #- override /trainer: multi_gpu
 
 
 seed: 42
 start_time: ${now:%Y-%m-%d_%H%M%S}
-task_name: "pretrain_xcl_wave_large" # improve this
+task_name: "pretrain_xcm_large" # improve this
 ckpt_path: null
 
 data:
   loaders:
     train: 
       num_workers: 24
-      batch_size: 128 # change to 128 if two gpus
+      batch_size: 32 # change to 128 if two gpus
       shuffle: true
       pin_memory: false
       drop_last: true
-      prefetch_factor: 2
   dataset: 
     saved_images: null
     #save_to_disk: /scratch/birdset/XCL/XCL_processed_ogg
-    save_to_disk: /scratch/birdset/XCL/XCL_processed_500_2events_ogg
     test_in_val: false
-  transform:
-    waveform_augmentations:
-      mixup_wave:
-        p: 0.9
+  # transform:
+  #   waveform_augmentations:
+  #     mixup_wave:
+  #       p: 0.9
+
 
 logger:
-  experiment_name: pretrain_xcl_wave_large
+  experiment_name: pretrain_xcm_large
 
 trainer:
-  max_epochs: 100
+  max_epochs: 30
   limit_val_batches: 0.0
-  check_val_every_n_epoch: 10
+  check_val_every_n_epoch: 0
   enable_checkpointing: true
 
 module:

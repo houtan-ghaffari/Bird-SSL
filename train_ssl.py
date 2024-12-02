@@ -38,7 +38,7 @@ def train(cfg: DictConfig):
     log.info(f"Root directory:  <{os.path.abspath(cfg.paths.root_dir)}>")
     log.info(f"Work directory:  <{os.path.abspath(cfg.paths.work_dir)}>")
     log.info(f"Output directory:  <{os.path.abspath(cfg.paths.output_dir)}>")
-    log.info(f"Model directory:  <{os.path.abspath(cfg.callbacks.model_checkpoint.dirpath)}>")
+    #log.info(f"Model directory:  <{os.path.abspath(cfg.callbacks.model_checkpoint.dirpath)}>")
 
     log.info("Seed everything with cfg.")
     L.seed_everything(cfg.seed)
