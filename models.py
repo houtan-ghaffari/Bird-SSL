@@ -308,6 +308,15 @@ class AudioMAE(L.LightningModule):
         memory_used = memory.used / (1024**3) # GB
         print(f"Epcch starts. RAM Usage: {memory_percent}% ({memory_used:.2f} GB)")
 
+                # Get the current process
+        process = psutil.Process()
+        
+        # Get memory info for the current process
+        memory_info = process.memory_info()
+        memory_used = memory_info.rss / (1024**3)  # Convert bytes to GB
+        
+        print(f"Epoch started. Memory Used by this process: {memory_used:.2f} MB")
+
     def training_step(self, batch, batch_idx):
         audio = batch["audio"]
         #labels = batch["label"]
