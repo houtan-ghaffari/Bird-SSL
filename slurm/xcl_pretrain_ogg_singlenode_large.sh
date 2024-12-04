@@ -5,10 +5,10 @@
 #SBATCH --gres=gpu:4
 #SBATCH --mem=164gb
 #SBATCH --partition=main
-#SBATCH --job-name=birdMAE_pretrain_XCL_scratch_4_moremixup
-#SBATCH --output=/mnt/work/bird2vec/logs/mgpu_l40_moremixup_large_%N_%t_.log
+#SBATCH --job-name=birdMAE_XCL_swin_large
+#SBATCH --output=/mnt/work/bird2vec/logs/birdMAE_XCL_swin_large_%N_%t_res.log
 #SBATCH --time=96:00:00
-#SBATCH --nodelist=gpu-l40s-1
+#SBATCH --nodelist=gpu-a100-5
 
 ####SBATCH --exclude=gpu-v100-1,gpu-v100-2,gpu-v100-3,gpu-v100-4,gpu-a100-4
 

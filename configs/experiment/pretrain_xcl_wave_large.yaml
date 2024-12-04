@@ -16,18 +16,18 @@ defaults:
 
 seed: 42
 start_time: ${now:%Y-%m-%d_%H%M%S}
-task_name: "pretrain_xcl_wave_large" # improve this
+task_name: "pretrain_xcl_large_swin" # improve this
 ckpt_path: null
 
 data:
   loaders:
     train: 
       num_workers: 24
-      batch_size: 128 # change to 128 if two gpus
+      batch_size: 64 # change to 128 if two gpus
       shuffle: true
       pin_memory: false
       drop_last: true
-      prefetch_factor: 2
+      #prefetch_factor: 2
   dataset: 
     saved_images: null
     #save_to_disk: /scratch/birdset/XCL/XCL_processed_ogg
@@ -36,13 +36,13 @@ data:
   transform:
     waveform_augmentations:
       mixup_wave:
-        p: 0.9
+        p: 0.3
 
 logger:
   experiment_name: ${task_name}
 
 trainer:
-  max_epochs: 100
+  max_epochs: 32
   limit_val_batches: 0.0
   check_val_every_n_epoch: 10
   enable_checkpointing: true
@@ -51,6 +51,7 @@ module:
   optimizer:
     target:
       lr: 2e-4
+      weight_decay: 1e-4
     extras:
       layer_decay: 0.0
   network:

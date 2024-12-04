@@ -17,6 +17,7 @@ defaults:
 seed: 42
 start_time: ${now:%Y-%m-%d_%H%M%S}
 task_name: "pretrain_xcl_base_swin" # improve this
+ckpt_path: null
 
 data:
   loaders:
