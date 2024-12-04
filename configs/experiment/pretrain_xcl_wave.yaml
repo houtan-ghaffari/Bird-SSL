@@ -22,7 +22,7 @@ data:
   loaders:
     train: 
       num_workers: 24
-      batch_size: 32 #8 gpus, batch size =32
+      batch_size: 64 #8 gpus, batch size =32
       shuffle: true
       pin_memory: false
       drop_last: true
