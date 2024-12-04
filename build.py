@@ -24,6 +24,7 @@ def build_model(cfg_module: DictConfig):
         module = AudioMAE(
             norm_layer=cfg_module.network.norm_layer,
             norm_pix_loss=cfg_module.network.norm_pix_loss,
+            mask_ratio=cfg_module.network.mask_ratio,
             cfg_encoder=cfg_module.network.encoder,
             cfg_decoder=cfg_module.network.decoder,
             optimizer=cfg_module.optimizer,

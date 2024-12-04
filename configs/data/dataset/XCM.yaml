@@ -16,7 +16,7 @@ std: 4.43
 # save_to_disk: /home/lrauch/projects/birdMAE/data/HSN/HSN_processed_42_df93c4dd1f3e8a6b
 # save_to_disk: /home/lrauch/projects/birdMAE/data/HSN/HSN_processed_42_c205f09fc5635d1e
 #save_to_disk: /home/lrauch/projects/birdMAE/data/HSN/HSN_processed_42_cdb073221fc18e3d
-#save_to_disk: /home/lrauch/projects/birdMAE/data/XCM/XCM_processed_42_004252813e2e3003
-save_to_disk: /home/lrauch/projects/birdMAE/data/XCM/XCM_processed_100_1events_ogg
+save_to_disk: /home/lrauch/projects/birdMAE/data/XCM/XCM_processed_42_004252813e2e3003
+#save_to_disk: /home/lrauch/projects/birdMAE/data/XCM/XCM_processed_100_1events_ogg
 test_in_val: false
 saved_images: null

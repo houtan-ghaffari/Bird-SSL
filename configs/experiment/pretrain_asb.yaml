@@ -8,7 +8,7 @@ defaults:
   - override /module/network: amae_vitbase_16
   - override /module/optimizer: adamw
   - override /module/scheduler: cosine
-  - override /module/loss: binary_cross_entropy
+  - override /module/loss: mean_squared_error 
   - override /paths: workstation
   - override /trainer: single_gpu
 
@@ -50,7 +50,7 @@ callbacks:
     filename: ${module.network.name}_${data.dataset.name}_{epoch:02d}
     save_last: true
     save_weights_only: true
-    every_n_epochs: 5
+    every_n_epochs: 50
     save_top_k: -1
     save_on_train_epoch_end: true
     monitor: "train_loss"

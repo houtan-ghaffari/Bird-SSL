@@ -3,12 +3,12 @@ defaults:
   - override /callbacks: default_ssl
   - override /data/dataset: XCL
   - override /data/loaders: audioset_balanced
-  - override /data/transform: pretrain_melbank_birdset_birdsetspec
+  - override /data/transform: pretrain_melbank_birdset
   - override /logger: mlflow
   - override /module/network: amae_vitbase_16
   - override /module/optimizer: adamw
   - override /module/scheduler: cosine
-  - override /module/loss: binary_cross_entropy # remove this or improve
+  - override /module/loss: mean_squared_error # remove this or improve
   - override /paths: cluster
   #- override /trainer: single_gpu
   - override /trainer: multi_gpu
@@ -16,13 +16,13 @@ defaults:
 
 seed: 42
 start_time: ${now:%Y-%m-%d_%H%M%S}
-task_name: "pretrain_xcl_wave" # improve this
+task_name: "pretrain_xcl_base_swin" # improve this
 
 data:
   loaders:
     train: 
       num_workers: 24
-      batch_size: 128
+      batch_size: 32 #8 gpus, batch size =32
       shuffle: true
       pin_memory: false
       drop_last: true
@@ -32,17 +32,18 @@ data:
     save_to_disk: /scratch/birdset/XCL/XCL_processed_500_2events_ogg
     #save_to_disk: /mnt/datasets/bird_recordings/birdset_hf_download/XCL/XCL_processed_500_2events_ogg
     test_in_val: false
-    mean: -4.268 # REMOVE IF OTHER INPUT!!!!!
-    std: 4.569
-
-
-
+    # mean: -4.268 # REMOVE IF OTHER INPUT!!!!!
+    # std: 4.569
+  transform:
+    waveform_augmentations:
+      mixup_wave:
+        p: 0.3
 
 logger:
-  experiment_name: pretrain_xcl_wave
+  experiment_name: ${task_name}
 
 trainer:
-  max_epochs: 100
+  max_epochs: 32
   limit_val_batches: 0.0
   check_val_every_n_epoch: 1
   enable_checkpointing: true
@@ -51,6 +52,7 @@ module:
   optimizer:
     target:
       lr: 2e-4
+      weight_decay: 1e-4
     extras:
       layer_decay: 0.0
   network:
@@ -62,7 +64,7 @@ callbacks:
     filename: ${module.network.name}_${data.dataset.name}_{epoch:02d}
     save_last: true
     save_weights_only: false
-    every_n_epochs: 5
+    every_n_epochs: 10
     save_top_k: -1
     save_on_train_epoch_end: true
 

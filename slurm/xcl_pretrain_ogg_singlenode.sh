@@ -1,15 +1,15 @@
 #!/usr/bin/zsh
 #SBATCH --nodes=1
-#SBATCH --ntasks-per-node=2
+#SBATCH --ntasks-per-node=8
 #SBATCH --cpus-per-task=26
-#SBATCH --gres=gpu:2
-#SBATCH --mem=164gb
+#SBATCH --gres=gpu:8
+#SBATCH --mem=600gb
 #SBATCH --partition=main
-#SBATCH --job-name=birdMAE_pretrain_XCL_scratch_mgpu_birdset_res
-#SBATCH --output=/mnt/work/bird2vec/logs/mgpu_birdset_spec_%N_%t_res.log
+#SBATCH --job-name=birdMAE_XCL_swin_base
+#SBATCH --output=/mnt/work/bird2vec/logs/birdMAE_XCL_swin_base_%N_%t_res.log
 #SBATCH --time=96:00:00
 ###SBATCH --exclude=gpu-v100-3
-#SBATCH --nodelist=gpu-a100-5
+#SBATCH --nodelist=gpu-l40s-1
 
 ###SBATCH --exclude=gpu-v100-1,gpu-v100-2,gpu-v100-3,gpu-v100-4
 ######,gpu-a100-1,gpu-a100-2
@@ -35,7 +35,7 @@ srun python train_ssl.py experiment=pretrain_xcl_wave.yaml \
         trainer.devices=2 \
         +trainer.num_nodes=1 \
         trainer.precision=bf16 \
-        ckpt_path="/mnt/work/bird2vec/logs_pretrain_audioset_MAE/pretrain_xcl_wave/runs/XCL/AudioMAE/2024-11-29_132014/callback_checkpoints/last.ckpt"
+        #ckpt_path="/mnt/work/bird2vec/logs_pretrain_audioset_MAE/pretrain_xcl_wave/runs/XCL/AudioMAE/2024-11-29_132014/callback_checkpoints/last.ckpt"
 
 
 echo "Finished script."

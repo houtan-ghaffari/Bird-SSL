@@ -5,7 +5,10 @@ import hydra
 from torchmetrics import MetricCollection
 from timm.models.vision_transformer import PatchEmbed
 from timm.models.vision_transformer import Block
-from timm.models.swin_transformer import SwinTransformerBlock
+#from timm.models.swin_transformer import SwinTransformerBlock
+from util.swin_transformer import SwinTransformerBlock
+#from timm.models.swin_transformer import SwinTransformerBlock
+
 from timm.models.vision_transformer import VisionTransformer
 from timm.optim.optim_factory import param_groups_weight_decay
 from timm.models.layers import trunc_normal_
@@ -28,15 +31,15 @@ class MAE_Encoder(nn.Module):
                  num_heads, 
                  mlp_ratio, 
                  norm_layer, 
-                 pos_trainable,
-                 stride):
+                 pos_trainable
+                 ):
         super().__init__()
-        # input: (Batch, Channel, Height, Width)
+        # input: (Batch, Channel, Height 128, Width 1024)
         # output: (Batch, #Patch, Embed)
         self.patch_embed = PatchEmbed_org((img_size_x, img_size_y), patch_size, in_chans, embed_dim)
         num_patches = self.patch_embed.num_patches
 
-        self.cls_token = nn.Parameter(torch.zeros(1, 1, embed_dim))
+        self.cls_token = nn.Parameter(torch.zeros(1, 1, embed_dim)) # 1, 1, 768
         self.pos_embed = nn.Parameter(torch.zeros(1, num_patches + 1, embed_dim), requires_grad=pos_trainable)
 
         norm_layer = partial(nn.LayerNorm, eps=1e-6)
@@ -70,7 +73,7 @@ class MAE_Encoder(nn.Module):
     
     def forward(self, x, mask_ratio):
         # embed patches through encoder
-        x = self.patch_embed(x)
+        x = self.patch_embed(x) # batch size, 1, width, height
 
         # add pos embed w/o cls token
         x = x + self.pos_embed[:, 1:, :]
@@ -103,30 +106,39 @@ class MAE_Decoder(nn.Module):
                  pos_trainable,
                  patch_size,
                  in_chans,
+                 no_shift,
+                 target_length
         ):
         super().__init__()
-        
+        self.decoder_mode = decoder_mode
         self.decoder_embed = nn.Linear(embed_dim, decoder_embed_dim, bias=True)
         self.mask_token = nn.Parameter(torch.zeros(1, 1, decoder_embed_dim))
         self.decoder_pos_embed = nn.Parameter(torch.zeros(1, num_patches + 1, decoder_embed_dim), requires_grad=pos_trainable)
         norm_layer = partial(nn.LayerNorm, eps=1e-6) # for both?
-
-        
-        if decoder_mode == "swin":
+    
+        if self.decoder_mode == "swin":
             decoder_modules = []
             window_size = (4,4)
-            feat_size = (64,8)
+            if target_length == 1024: #10 seconds
+                feat_size = (64,8)
+            elif target_length == 512: #5 seconds
+                feat_size = (32,8)
+            else:
+                raise ValueError("Target length not supported for swin decoder")
 
             for i in range(16):
-                if (i % 2) == 0:
+                if no_shift:
                     shift_size = (0,0)
                 else:
-                    shift_size = (2,0)
+                    if (i % 2) == 0:
+                        shift_size = (0,0)
+                    else:
+                        shift_size = (2,0)
 
                 decoder_modules.append(
                     SwinTransformerBlock(
                         dim=decoder_embed_dim,
-                        num_heads=16,
+                        num_heads=decoder_num_heads, #16
                         feat_size=feat_size,
                         window_size=window_size,
                         shift_size=shift_size,
@@ -136,7 +148,7 @@ class MAE_Decoder(nn.Module):
                         drop_path=0.0,
                         extra_norm=False,
                         sequential_attn=False,
-                        norm_layer=norm_layer
+                        norm_layer=norm_layer ##nn.layerNorm
                     )
                 )
 
@@ -152,26 +164,36 @@ class MAE_Decoder(nn.Module):
         self.decoder_pred = nn.Linear(decoder_embed_dim, patch_size**2 * in_chans, bias=True)
 
     def forward(self, x, ids_restore):
-        x = self.decoder_embed(x)
+        x = self.decoder_embed(x) # in:batch, x length +1, encoder_embed_dim
+        #out: batch, length +1, decoder_embed_dim
 
         #append mask tokens to sequence
         mask_tokens = self.mask_token.repeat(x.shape[0], ids_restore.shape[1] + 1 - x.shape[1], 1)
-        x_ = torch.cat([x[:, 1:, :], mask_tokens], dim=1)
-        x_ = torch.gather(x_, dim=1, index=ids_restore.unsqueeze(-1).repeat(1, 1, x.shape[2]))
-        x = torch.cat([x[:, :1, :], x_], dim=1)
+        x_ = torch.cat([x[:, 1:, :], mask_tokens], dim=1)  # no cls token
+        x_ = torch.gather(x_, dim=1, index=ids_restore.unsqueeze(-1).repeat(1, 1, x.shape[2]))  # unshuffle
+        x = torch.cat([x[:, :1, :], x_], dim=1)  # append cls token
 
         #add pos embed
         x = x + self.decoder_pos_embed
 
+        if self.decoder_mode == "swin": #!= 0 --> should be 0 in the original implementation
+            B, L, D = x.shape # batch, length(patches), dim (decoder)
+            x = x[:,1:,:]
+        else:
+            print("Decoder mode is not swin")
+    
         for blk in self.blocks:
             x = blk(x)
+
         x = self.decoder_norm(x)
 
         #predictor projection
         pred = self.decoder_pred(x)
 
-        #remove cls token
-        pred = pred[:, 1:, :]
+        if self.decoder_mode == "swin":
+            pred = pred
+        else:
+            pred = pred[:, 1:, :] # remove cls        
 
         return pred 
     
@@ -180,6 +202,7 @@ class AudioMAE(L.LightningModule):
     def __init__(self, 
                  norm_layer,
                  norm_pix_loss,
+                 mask_ratio,
                  cfg_encoder,
                  cfg_decoder,
                  optimizer,
@@ -188,6 +211,15 @@ class AudioMAE(L.LightningModule):
     ):
         super().__init__()
         self.save_hyperparameters()
+
+        self.norm_pix_loss = norm_pix_loss
+        self.mask_ratio = mask_ratio        
+        self.optimizer_cfg = optimizer.target
+        self.scheduler_cfg = scheduler 
+        self.loss = hydra.utils.instantiate(loss)
+        self.train_batch_size = optimizer.extras.train_batch_size
+        self.layer_decay = optimizer.extras.layer_decay
+        self.target_length = cfg_encoder.img_size_x
 
         self.encoder = MAE_Encoder(
             img_size_x=cfg_encoder.img_size_x,
@@ -200,7 +232,6 @@ class AudioMAE(L.LightningModule):
             mlp_ratio=cfg_encoder.mlp_ratio,
             norm_layer=norm_layer,
             pos_trainable=cfg_encoder.pos_trainable,
-            stride=None
         )
 
         self.decoder = MAE_Decoder(
@@ -214,15 +245,10 @@ class AudioMAE(L.LightningModule):
             patch_size=cfg_decoder.patch_size,
             in_chans=cfg_encoder.in_chans,
             decoder_mode=cfg_decoder.mode,
-            pos_trainable=cfg_decoder.pos_trainable
+            pos_trainable=cfg_decoder.pos_trainable,
+            no_shift=cfg_decoder.no_shift,
+            target_length=self.target_length
         )
-
-        self.norm_pix_loss = norm_pix_loss
-        self.optimizer_cfg = optimizer.target
-        self.scheduler_cfg = scheduler 
-        self.loss = hydra.utils.instantiate(loss)
-        self.train_batch_size = optimizer.extras.train_batch_size
-        self.layer_decay = optimizer.extras.layer_decay
 
         self.initialize_weights()
 
@@ -272,9 +298,9 @@ class AudioMAE(L.LightningModule):
         
         return x
 
-    def unpatchify(self, x):
+    def unpatchify(self, x): # changed? 
         p = self.encoder.patch_embed.patch_size[0]    
-        h = 1024//p
+        h = self.target_length//p
         w = 128//p
         x = x.reshape(shape=(x.shape[0], h, w, p, p, 1))
         x = torch.einsum('nhwpqc->nchpwq', x)
@@ -289,40 +315,25 @@ class AudioMAE(L.LightningModule):
             target = (target - mean) / (var + 1.e-6)**.5
 
         #loss = self.loss(pred, target)
-        loss = (pred - target) ** 2
-        loss = loss.mean(dim=-1)  # [N, L], mean loss per patch
-
+        # loss = (pred - target) ** 2
+        # loss = loss.mean(dim=-1)  # [N, L], mean loss per patch
+        loss = self.loss(pred, target)
+        loss = loss.mean(dim=-1)
         loss = (loss * mask).sum() / mask.sum()  # mean loss on removed patches
         return loss   
 
     def forward(self, imgs, mask_ratio=0.75):
         latent, mask, ids_restore = self.encoder(imgs, mask_ratio)
         pred = self.decoder(latent, ids_restore)
-        loss = self.forward_loss(imgs, pred, mask)
-        return loss, pred, mask
-
-    def on_train_epoch_start(self):
-        import psutil
-        memory = psutil.virtual_memory() 
-        memory_percent = memory.percent
-        memory_used = memory.used / (1024**3) # GB
-        print(f"Epcch starts. RAM Usage: {memory_percent}% ({memory_used:.2f} GB)")
-
-                # Get the current process
-        process = psutil.Process()
-        
-        # Get memory info for the current process
-        memory_info = process.memory_info()
-        memory_used = memory_info.rss / (1024**3)  # Convert bytes to GB
-        
-        print(f"Epoch started. Memory Used by this process: {memory_used:.2f} MB")
+        loss_recon = self.forward_loss(imgs, pred, mask)
+        return loss_recon, pred, mask
 
     def training_step(self, batch, batch_idx):
         audio = batch["audio"]
         #labels = batch["label"]
-        loss, pred, mask = self(audio)
-        self.log('train_loss', loss, on_step=True, on_epoch=True, prog_bar=True)
-        return loss
+        loss_recon, pred, mask = self(audio)
+        self.log('train_loss', loss_recon, on_step=True, on_epoch=True, prog_bar=True)
+        return loss_recon
 
     def validation_step(self, batch, batch_idx):
         pass

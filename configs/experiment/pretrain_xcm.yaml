@@ -8,13 +8,13 @@ defaults:
   - override /module/network: amae_vitlarge_16
   - override /module/optimizer: adamw
   - override /module/scheduler: cosine
-  - override /module/loss: binary_cross_entropy
+  - override /module/loss: mean_squared_error
   - override /paths: workstation
   - override /trainer: single_gpu
 
 seed: 42
 start_time: ${now:%Y-%m-%d_%H%M%S}
-task_name: "pretrain_xcm" # improve this
+task_name: pretrain_xcm # improve this
 
 data:
   loaders:
@@ -27,7 +27,7 @@ data:
 
 
 logger:
-  experiment_name: pretrain_xcm
+  experiment_name: ${task_name}
 
 trainer:
   max_epochs: 2

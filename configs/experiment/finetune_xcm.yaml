@@ -16,7 +16,7 @@ defaults:
 
 seed: 42
 start_time: ${now:%Y-%m-%d_%H%M%S}
-task_name: "finetune_hsn"
+task_name: "finetune_xcm"
 
 train: true
 test: true
@@ -48,9 +48,9 @@ module:
       #lr: 1e-3
       #lr: 3e-4
       #lr: 3e-3
-      lr: 2e-4
+      lr: 4e-4
       #lr: 5e-4
-      #lr: 1e-4
+      #lr: 1e-4S
       #weight_decay: 3e-2
       weight_decay: 3e-3
     extras:

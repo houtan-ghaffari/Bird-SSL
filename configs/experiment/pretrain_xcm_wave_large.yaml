@@ -8,7 +8,7 @@ defaults:
   - override /module/network: amae_vitlarge_16
   - override /module/optimizer: adamw
   - override /module/scheduler: cosine
-  - override /module/loss: binary_cross_entropy # remove this or improve
+  - override /module/loss: mean_squared_error # remove this or improve
   - override /paths: workstation
   - override /trainer: single_gpu
   #- override /trainer: multi_gpu
@@ -36,9 +36,8 @@ data:
   #     mixup_wave:
   #       p: 0.9
 
-
 logger:
-  experiment_name: pretrain_xcm_large
+  experiment_name: ${task_name}
 
 trainer:
   max_epochs: 30
