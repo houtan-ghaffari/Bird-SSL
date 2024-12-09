@@ -714,9 +714,9 @@ class VIT(L.LightningModule, VisionTransformer):
     def configure_optimizers(self):
 
         #heuristic:
-        # eff_batch_size = self.trainer.accumulate_grad_batches * self.trainer.num_devices * self.train_batch_size
-        # self.optimizer_cfg["lr"] = self.optimizer_cfg["lr"] * eff_batch_size / 256
-        # print("effective learning rate:", self.optimizer_cfg["lr"], self.layer_decay)
+        eff_batch_size = self.trainer.accumulate_grad_batches * self.trainer.num_devices * self.train_batch_size
+        self.optimizer_cfg["lr"] = self.optimizer_cfg["lr"] * eff_batch_size / 48
+        print("effective learning rate:", self.optimizer_cfg["lr"], self.layer_decay)
 
         if self.layer_decay:
             params = param_groups_lrd(

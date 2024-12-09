@@ -10,3 +10,4 @@ __pycache__/
 /model_checkpoints/
 util/__pycache__/patch_embed.cpython-310.pyc
 util/__pycache__/pos_embed.cpython-310.pyc
+/examples/
