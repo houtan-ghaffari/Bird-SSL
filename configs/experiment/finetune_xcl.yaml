@@ -16,7 +16,7 @@ defaults:
 
 seed: 42
 start_time: ${now:%Y-%m-%d_%H%M%S}
-task_name: "finetune_xcm"
+task_name: "finetune_xcl"
 
 train: true
 test: false
