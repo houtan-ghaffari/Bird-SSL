@@ -34,7 +34,7 @@ def finetune(cfg: DictConfig):
     L.seed_everything(cfg.seed)
     torch.set_num_threads(12)
     
-    if cfg.data.dataset.name == "HSN":
+    if "birdset" in cfg.data.dataset.hf_path.lower(): # correct this later 
         datamodule = BirdSetDataModule(
             dataset_configs=cfg.data.dataset,
             loader_configs=cfg.data.loaders,
