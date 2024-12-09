@@ -1,8 +1,8 @@
 #!/usr/bin/zsh
 #SBATCH --nodes=1
-#SBATCH --ntasks-per-node=4
+#SBATCH --ntasks-per-node=2
 #SBATCH --cpus-per-task=26
-#SBATCH --gres=gpu:4
+#SBATCH --gres=gpu:2
 #SBATCH --mem=500gb
 #SBATCH --partition=main
 #SBATCH --job-name=birdMAE_XCL_swin_large_nomix
@@ -30,7 +30,7 @@ export HYDRA_FULL_ERROR=1
 hostname
 srun python train_ssl.py \
         experiment=pretrain_xcl_wave_large.yaml \
-        trainer.devices=4 \
+        trainer.devices=2 \
         +trainer.num_nodes=1 \
         trainer.precision=bf16 \
         #ckpt_path="/mnt/work/bird2vec/logs_pretrain_audioset_MAE/pretrain_xcl_wave_large/runs/XCL/AudioMAE/2024-11-23_123703/callback_checkpoints/last.ckpt"
