@@ -22,7 +22,7 @@ train: true
 test: true
 
 logger:
-  experiment_name: overnight_hsn
+  experiment_name: overnight_hsn_swin
 
 data:
   loaders:

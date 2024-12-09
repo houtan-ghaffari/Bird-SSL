@@ -19,7 +19,7 @@
 # done  
 
 
-weight_decays=(3e-2 3e-3 3e-4)
+weight_decays=(3e-3 3e-4)
 # Define the learning rates you want to try
 learning_rates=(1e-3 5e-4 4e-4 3e-4 2e-4 1e-4)
 for decay in "${weight_decays[@]}"; do

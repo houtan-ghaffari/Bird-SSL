@@ -315,15 +315,15 @@ class AudioMAE(L.LightningModule):
             target = (target - mean) / (var + 1.e-6)**.5
 
         #loss = self.loss(pred, target)
-        # loss = (pred - target) ** 2
-        # loss = loss.mean(dim=-1)  # [N, L], mean loss per patch
-        loss = self.loss(pred, target)
-        loss = loss.mean(dim=-1)
+        loss = (pred - target) ** 2
+        loss = loss.mean(dim=-1)  # [N, L], mean loss per patch
+        #loss = self.loss(pred, target)
+        #loss = loss.mean(dim=-1)
         loss = (loss * mask).sum() / mask.sum()  # mean loss on removed patches
         return loss   
 
-    def forward(self, imgs, mask_ratio=0.75):
-        latent, mask, ids_restore = self.encoder(imgs, mask_ratio)
+    def forward(self, imgs):
+        latent, mask, ids_restore = self.encoder(imgs, self.mask_ratio)
         pred = self.decoder(latent, ids_restore)
         loss_recon = self.forward_loss(imgs, pred, mask)
         return loss_recon, pred, mask
@@ -331,9 +331,9 @@ class AudioMAE(L.LightningModule):
     def training_step(self, batch, batch_idx):
         audio = batch["audio"]
         #labels = batch["label"]
-        loss_recon, pred, mask = self(audio)
-        self.log('train_loss', loss_recon, on_step=True, on_epoch=True, prog_bar=True)
-        return loss_recon
+        loss, pred, mask = self(audio)
+        self.log('train_loss', loss, on_step=True, on_epoch=True, prog_bar=True)
+        return loss
 
     def validation_step(self, batch, batch_idx):
         pass
@@ -714,9 +714,9 @@ class VIT(L.LightningModule, VisionTransformer):
     def configure_optimizers(self):
 
         #heuristic:
-        eff_batch_size = self.trainer.accumulate_grad_batches * self.trainer.num_devices * self.train_batch_size
-        self.optimizer_cfg["lr"] = self.optimizer_cfg["lr"] * eff_batch_size / 48
-        print("effective learning rate:", self.optimizer_cfg["lr"], self.layer_decay)
+        # eff_batch_size = self.trainer.accumulate_grad_batches * self.trainer.num_devices * self.train_batch_size
+        # self.optimizer_cfg["lr"] = self.optimizer_cfg["lr"] * eff_batch_size / 48
+        # print("effective learning rate:", self.optimizer_cfg["lr"], self.layer_decay)
 
         if self.layer_decay:
             params = param_groups_lrd(

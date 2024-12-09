@@ -34,10 +34,7 @@ data:
     save_to_disk: /scratch/birdset/XCL/XCL_processed_500_2events_ogg
     test_in_val: false
   transform:
-    waveform_augmentations:
-      mixup_wave:
-        p: 0.3
-
+    waveform_augmentations: null
 logger:
   experiment_name: ${task_name}
 
