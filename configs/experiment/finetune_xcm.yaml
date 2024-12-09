@@ -1,7 +1,7 @@
 # @package _global_
 defaults:
   - override /callbacks: default
-  - override /data/dataset: HSN
+  - override /data/dataset: XCM
   - override /data/loaders: esc50
   - override /data/transform: melbank_birdset
   - override /logger: mlflow
@@ -22,7 +22,7 @@ train: true
 test: true
 
 logger:
-  experiment_name: overnight_hsn
+  experiment_name: t
 
 data:
   loaders:
@@ -30,6 +30,8 @@ data:
       num_workers: 12
       batch_size: 48
       shuffle: true
+  dataset:
+    columns: ["filepath", "labels", "detected_events", "start_time", "end_time"]
 
     
 trainer:
