@@ -40,5 +40,14 @@ srun python train_ssl.py \
         module.network.pretrained_weights_path="/mnt/work/bird2vec/logs_pretrain_audioset_MAE/pretrain_xcl_large_swin/runs/XCL/AudioMAE/2024-12-04_205512/callback_checkpoints/last.ckpt"
         #ckpt_path="/mnt/work/bird2vec/logs_pretrain_audioset_MAE/pretrain_xcl_wave_large/runs/XCL/AudioMAE/2024-11-23_123703/callback_checkpoints/last.ckpt"
 
+# Capture the exit status of the Python script
+EXIT_STATUS=$?
+
+if [ $EXIT_STATUS -ne 0 ]; then
+    echo "Python script encountered an error (exit status: $EXIT_STATUS). Waiting for 60 seconds before exiting..."
+    sleep 60m  # Adjust the wait time as needed
+else
+    echo "Python script completed successfully."
+fi
 
 echo "Finished script."
