@@ -44,8 +44,7 @@ trainer:
   limit_val_batches: 0.0 # no val
   gradient_clip_val: 0.1
   precision: 16-mixed
-  strategy:
-    search_unused_parameters: True
+  search_unused_parameters: True
 
 
 
