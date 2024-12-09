@@ -1,12 +1,12 @@
 #!/usr/bin/zsh
 #SBATCH --nodes=1
-#SBATCH --ntasks-per-node=4
+#SBATCH --ntasks-per-node=1
 #SBATCH --cpus-per-task=26
-#SBATCH --gres=gpu:4
+#SBATCH --gres=gpu:1
 #SBATCH --mem=500gb
 #SBATCH --partition=main
-#SBATCH --job-name=finetune_XCL_swin_large
-#SBATCH --output=/mnt/work/bird2vec/logs/finetune/finetune_XCL_swin_large_%N_%t.log
+#SBATCH --job-name=finetune_XCL_swin_large_s
+#SBATCH --output=/mnt/work/bird2vec/logs/finetune/finetune_XCL_swin_large_s_%N_%t.log
 #SBATCH --time=96:00:00
 #SBATCH --nodelist=gpu-l40s-1
 
@@ -30,7 +30,7 @@ export HYDRA_FULL_ERROR=1
 hostname
 srun python finetune.py \
         experiment=finetune_xcl.yaml \
-        trainer.devices=4 \
+        trainer.devices=1 \
         +trainer.num_nodes=1 \
         trainer.precision=bf16 \
         module.network.pretrained_weights_path="/mnt/work/bird2vec/logs_pretrain_audioset_MAE/pretrain_xcl_large_swin/runs/XCL/AudioMAE/2024-12-04_205512/callback_checkpoints/last.ckpt"

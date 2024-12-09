@@ -1,6 +1,6 @@
 # @package _global_
 defaults:
-  - override /callbacks: default
+  - override /callbacks: default_ssl
   - override /data/dataset: XCL
   - override /data/loaders: esc50
   - override /data/transform: melbank_birdset
@@ -44,10 +44,7 @@ trainer:
   limit_val_batches: 0.0 # no val
   gradient_clip_val: 0.1
   precision: 16-mixed
-  search_unused_parameters: True
   strategy: ddp_find_unused_parameters_true
-
-
 
 
 module:
