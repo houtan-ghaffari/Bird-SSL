@@ -45,6 +45,8 @@ trainer:
   gradient_clip_val: 0.1
   precision: 16-mixed
   search_unused_parameters: True
+  strategy: ddp_find_unused_parameters_true
+
 
 
 
