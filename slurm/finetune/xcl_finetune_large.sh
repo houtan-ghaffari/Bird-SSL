@@ -26,10 +26,6 @@ cd /mnt/home/lrauch/projects/birdMAE/
 
 export CUDA_LAUNCH_BLOCKING=1
 export HYDRA_FULL_ERROR=1
-#####export NCCL_DEBUG=INFO
-####export NCCL_DEBUG_SUBSYS=ALL
-#######export CUDA_VISIBLE_DEVICES=3,2,1,0
-NUM_GPUS=$SLURM_GPUS_ON_NODE
 
 hostname
 srun python finetune.py \
