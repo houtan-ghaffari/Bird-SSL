@@ -27,8 +27,8 @@ logger:
 data:
   loaders:
     train: 
-      num_workers: 12
-      batch_size: 48
+      num_workers: 24
+      batch_size: 64
       shuffle: true
 
   dataset: 
@@ -44,8 +44,10 @@ trainer:
   limit_val_batches: 0.0 # no val
   gradient_clip_val: 0.1
   precision: 16-mixed
+  #strategy: auto
   strategy: ddp_find_unused_parameters_true
-
+  enable_checkpointing: true
+  
 
 module:
   network:
