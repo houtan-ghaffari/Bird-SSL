@@ -44,6 +44,10 @@ trainer:
   limit_val_batches: 0.0 # no val
   gradient_clip_val: 0.1
   precision: 16-mixed
+  strategy:
+    class_path: pytorch_lightning.strategies.DDPStrategy
+    init_args:
+      find_unused_parameters: true
 
 
 module:
