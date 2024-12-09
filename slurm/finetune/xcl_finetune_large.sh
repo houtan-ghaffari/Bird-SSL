@@ -32,8 +32,8 @@ export HYDRA_FULL_ERROR=1
 NUM_GPUS=$SLURM_GPUS_ON_NODE
 
 hostname
-srun python train_ssl.py \
-        experiment=pretrain_xcl_wave_large.yaml \
+srun python finetune.py \
+        experiment=finetune_xcl.yaml \
         trainer.devices=4 \
         +trainer.num_nodes=1 \
         trainer.precision=bf16 \
