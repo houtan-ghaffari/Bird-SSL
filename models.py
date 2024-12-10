@@ -559,6 +559,7 @@ class VIT(L.LightningModule, VisionTransformer):
 
         for blk in self.blocks:
             x = blk(x)
+            #x = torch.nan_to_num(x, nan=0.0) #????
 
         if self.global_pool:
             x = x[:, 1:, :].mean(dim=1)  # global pool without cls token

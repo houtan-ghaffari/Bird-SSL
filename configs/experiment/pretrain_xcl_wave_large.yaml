@@ -60,7 +60,7 @@ callbacks:
     filename: ${module.network.name}_${data.dataset.name}_{epoch:02d}
     save_last: true
     save_weights_only: false
-    every_n_epochs: 10
+    every_n_epochs: 5
     save_top_k: -1
     save_on_train_epoch_end: true
 
