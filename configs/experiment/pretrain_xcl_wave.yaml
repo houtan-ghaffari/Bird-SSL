@@ -36,9 +36,7 @@ data:
     # mean: -4.268 # REMOVE IF OTHER INPUT!!!!!
     # std: 4.569
   transform:
-    waveform_augmentations:
-      mixup_wave:
-        p: 0.3
+    waveform_augmentations: null
 
 logger:
   experiment_name: ${task_name}
