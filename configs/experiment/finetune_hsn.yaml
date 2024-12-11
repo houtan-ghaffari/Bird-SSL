@@ -5,8 +5,8 @@ defaults:
   - override /data/loaders: esc50
   - override /data/transform: melbank_birdset
   - override /logger: mlflow
-  #- override /module/network: vit_large_16.yaml
-  - override /module/network: vit_base_16.yaml
+  - override /module/network: vit_large_16.yaml
+  #- override /module/network: vit_base_16.yaml
   #- override /module/network: convnext.yaml
   - override /module/optimizer: adamw
   - override /module/scheduler: cosine
@@ -40,7 +40,6 @@ trainer:
   gradient_clip_val: 0.1
   precision: 16-mixed
 
-
 module:
   optimizer:
     target:
@@ -54,7 +53,9 @@ module:
       #lr: 1e-4
       #weight_decay: 3e-2
       weight_decay: 3e-3
+      
     extras:
       layer_decay: 0.75
       decay_type: inverse_normal
+      
 

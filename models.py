@@ -1060,6 +1060,12 @@ class ConvNext(L.LightningModule):
             warmup_ratio = 0.067 # hard coded
             num_warmup_steps = num_training_steps * warmup_ratio
 
+            # scheduler = get_cosine_schedule_with_warmup(
+            #     optimizer=self.optimizer,
+            #     num_warmup_steps=num_warmup_steps,
+            #     num_training_steps=num_training_steps
+            # )
+
             scheduler = CosineWarmupScheduler(
                 optimizer=self.optimizer,
                 warmup_steps=num_warmup_steps,
