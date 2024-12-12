@@ -54,5 +54,8 @@ callbacks:
     save_top_k: -1
     save_on_train_epoch_end: true
 
+  progress_bar:
+    refresh_rate: 1
+
 
 

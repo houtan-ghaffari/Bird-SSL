@@ -2,9 +2,9 @@ from typing import Tuple, Optional, List, Union, Any, Type
 
 import torch
 import torch.nn as nn
-import torch.utils.checkpoint as checkpoint
 
 from timm.layers import DropPath, to_2tuple
+import timm.layers as timm_layers
 
 class Mlp(nn.Module):
     """ MLP as used in Vision Transformer, MLP-Mixer and related networks
@@ -242,12 +242,12 @@ class SwinTransformerBlock(nn.Module):
         norm_layer: Type[nn.Module] = nn.LayerNorm,
     ) -> None:
         super(SwinTransformerBlock, self).__init__()
-        self.dim: int = dim
-        self.feat_size: Tuple[int, int] = feat_size
-        self.target_shift_size: Tuple[int, int] = to_2tuple(shift_size)
+        self.dim: int = dim #width(512)
+        self.feat_size: Tuple[int, int] = feat_size # number of patches: 16x16 for 512x128 = 32x8
+        self.target_shift_size: Tuple[int, int] = to_2tuple(shift_size) #(0,0)
         self.window_size, self.shift_size = self._calc_window_shift(to_2tuple(window_size))
         self.window_area = self.window_size[0] * self.window_size[1]
-        self.num_heads =num_heads
+        self.num_heads=num_heads
         # attn branch
         self.attn = WindowMultiHeadAttention(
             dim=dim,

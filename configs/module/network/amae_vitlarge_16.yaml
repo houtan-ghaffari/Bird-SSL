@@ -11,15 +11,17 @@ encoder:
     embed_dim: 1024
     depth: 24
     num_heads: 16
-    pos_trainable: False
+    pos_trainable: false
     mlp_ratio: 4
 decoder:
-    mode: swin
+    mode: swinv2
+    #mode: swin 
+    #mode null
     embed_dim: 512
-    depth: 8
+    depth: 12
     num_heads: 16
     mlp_ratio: 4
-    pos_trainable: False 
+    pos_trainable: false 
     patch_size: 16
-    no_shift: True
+    no_shift: false
 
