@@ -23,35 +23,36 @@ data:
   loaders:
     train: 
       num_workers: 24
-      batch_size: 64 #8 gpus, batch size =32
+      batch_size: 128 # change to 128 if two gpus
       shuffle: true
       pin_memory: false
       drop_last: true
+      #prefetch_factor: 2
   dataset: 
     saved_images: null
     #save_to_disk: /scratch/birdset/XCL/XCL_processed_ogg
     save_to_disk: /scratch/birdset/XCL/XCL_processed_500_2events_ogg
-    #save_to_disk: /mnt/datasets/bird_recordings/birdset_hf_download/XCL/XCL_processed_500_2events_ogg
     test_in_val: false
-    # mean: -4.268 # REMOVE IF OTHER INPUT!!!!!
-    # std: 4.569
   transform:
-    waveform_augmentations: null
+    waveform_augmentations: 
+      mixup_wave:
+        p: 0.5
 
 logger:
   experiment_name: ${task_name}
 
 trainer:
-  max_epochs: 32
+  max_epochs: 50
   limit_val_batches: 0.0
-  check_val_every_n_epoch: 1
+  check_val_every_n_epoch: 10
   enable_checkpointing: true
+  gradient_clip_val: 3
 
 module:
   optimizer:
     target:
       lr: 2e-4
-      weight_decay: 1e-4
+      weight_decay: 2e-4
     extras:
       layer_decay: 0.0
   network:
