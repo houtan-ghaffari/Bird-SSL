@@ -3,10 +3,10 @@
 #SBATCH --ntasks-per-node=2
 #SBATCH --cpus-per-task=26
 #SBATCH --gres=gpu:2
-#SBATCH --mem=600gb
+#SBATCH --mem=500gb
 #SBATCH --partition=main
-#SBATCH --job-name=birdMAE_XCL_swin_base_nomix
-#SBATCH --output=/mnt/work/bird2vec/logs/birdMAE_XCL_swin_base_%N_%t_nomix.log
+#SBATCH --job-name=birdMAE_XCL_swinv2_base_nomix
+#SBATCH --output=/mnt/work/bird2vec/logs/birdMAE_XCL_swinv2_base_%N_%t_nomix.log
 #SBATCH --time=96:00:00
 ###SBATCH --exclude=gpu-v100-3
 #SBATCH --nodelist=gpu-l40s-1
@@ -32,8 +32,22 @@ hostname
 srun python train_ssl.py experiment=pretrain_xcl_wave.yaml \
         trainer.devices=2 \
         +trainer.num_nodes=1 \
-        trainer.precision=bf16 \
+        trainer.precision=16-mixed \
+        trainer.strategy=ddp_find_unused_parameters_true \
+        data.transform.waveform_augmentations.mixup_wave.p=0.0 \
+        trainer.max_epochs=50 \
+        data.loaders.train.batch_size=128 
         #ckpt_path="/mnt/work/bird2vec/logs_pretrain_audioset_MAE/pretrain_xcl_wave/runs/XCL/AudioMAE/2024-11-29_132014/callback_checkpoints/last.ckpt"
 
 
 echo "Finished script."
+
+# if [ $? -ne 0 ]; then
+#     echo "Error: srun failed. Sleeping for 2 hours..."
+#     sleep 6h
+#     # Optionally, exit non-zero to signal failure
+#     exit 1
+# fi
+
+
+# echo "Finished script."
