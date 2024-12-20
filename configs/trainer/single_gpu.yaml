@@ -14,7 +14,7 @@ limit_val_batches: 1.0
 barebones: False
 check_val_every_n_epoch: 5
 
-strategy: auto
+strategy: auto 
 deterministic: False
 
 gradient_clip_val: null

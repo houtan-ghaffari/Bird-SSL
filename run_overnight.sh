@@ -31,6 +31,7 @@ for decay in "${weight_decays[@]}"; do
     lr_float=$(printf "%.10f" "$lr")
 
     python finetune.py \
+      trainer.max_epochs=20 \
       experiment=finetune_hsn.yaml \
       module.optimizer.target.lr=$lr \
       module.optimizer.target.weight_decay=$decay

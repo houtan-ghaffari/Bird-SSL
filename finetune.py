@@ -32,7 +32,7 @@ _HYDRA_PARAMS = {
 def finetune(cfg: DictConfig):
     log.info(f"Seed everything with {cfg.seed}")
     L.seed_everything(cfg.seed)
-    torch.set_num_threads(12)
+    #torch.set_num_threads(12)
     
     if "birdset" in cfg.data.dataset.hf_path.lower(): # correct this later 
         datamodule = BirdSetDataModule(

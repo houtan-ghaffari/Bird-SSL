@@ -824,7 +824,7 @@ class VIT(L.LightningModule, VisionTransformer):
 
 
             for k in ['head.weight', 'head.bias']:
-                if k in pretrained_state_dict and pretrained_state_dict[k].shape != self.state_dict[k].shape:
+                if k in pretrained_state_dict: #and pretrained_state_dict[k].shape != self.state_dict[k].shape:
                     print(f"Removing key {k} from pretrained checkpoint")
                     del pretrained_state_dict[k]
             
