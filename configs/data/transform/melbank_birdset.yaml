@@ -58,14 +58,14 @@ spectrogram_augmentations:
     p: 0.3
     transforms: # - _ --> list!
       - _target_: torchaudio.transforms.FrequencyMasking
-        freq_mask_param: 100
+        freq_mask_param: 50
         iid_masks: True
   time_masking:
     _target_: torchvision.transforms.RandomApply
     p: 0.3
     transforms: # - _ --> list!
       - _target_: torchaudio.transforms.TimeMasking
-        time_mask_param: 20 # change!!!!
+        time_mask_param: 100 # change!!!!
         iid_masks: True
 
 

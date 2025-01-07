@@ -24,7 +24,8 @@ pos_trainable: False
 #pretrained_weights_path: /home/lrauch/AudioMAE_XCL_epoch=64.ckpt
 #pretrained_weights_path: /home/lrauch/AudioMAE_XCL_epoch=29_mixup.ckpt
 #pretrained_weights_path: /home/lrauch/AudioMAE_XCL_epoch=34mixup_2024-11-21_103243.ckpt
-pretrained_weights_path: ${paths.root_dir}/weights/amae_as2m_pretrained.pth
+#pretrained_weights_path: ${paths.root_dir}/weights/amae_as2m_pretrained.pth
+pretrained_weights_path: /home/lrauch/mnt_check/pretrain_xcl_wave_large/runs/XCL/AudioMAE/2025-01-03_142512/callback_checkpoints/AudioMAE_XCL_epoch=99.ckpt
 #pretrained_weights_path: /home/lrauch/AudioMAE_XCL_epoch=99_mixup.ckpt
 #pretrained_weights_path: /home/lrauch/AudioMAE_XCL_epoch=30_mixup0.3_base_swin.ckpt
 #pretrained_weights_path: /home/lrauch/AudioMAE_XCL_epoch50_mixup0.5_base_swinv2.ckpt

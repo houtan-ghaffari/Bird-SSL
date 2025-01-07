@@ -498,9 +498,9 @@ class BirdSetTrainTransform(TrainTransform):
             fbank_features = fbank_features.permute(0,2,1)
 
 
-        if self.spec_aug:
-            fbank_features = self.spec_aug(fbank_features.permute(0,2,1))
-            fbank_features = fbank_features.permute(0,2,1)
+        # if self.spec_aug:
+        #     fbank_features = self.spec_aug(fbank_features.permute(0,2,1))
+        #     fbank_features = fbank_features.permute(0,2,1)
      
         # self.mixup_fn = SpecMixupN(
         #     num_mix=2,

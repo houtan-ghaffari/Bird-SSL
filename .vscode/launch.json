@@ -82,6 +82,38 @@
             },
             "cwd": "${workspaceFolder}"
         },
+        {
+            "name": "Python: Pretrain_XCM_jepa",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/train_jepa_ssl.py",
+            "args": [
+                "experiment=jepa/pretrain_xcm"
+            ],
+            "console": "integratedTerminal",
+            "justMyCode": true,
+            "env": {
+                "PYTHONPATH": "${workspaceFolder}",
+                "HYDRA_FULL_ERROR": "1"
+            },
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "name": "Python: finetune_HSN_jepa",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/finetune_jepa.py",
+            "args": [
+                "experiment=jepa/finetune_hsn"
+            ],
+            "console": "integratedTerminal",
+            "justMyCode": true,
+            "env": {
+                "PYTHONPATH": "${workspaceFolder}",
+                "HYDRA_FULL_ERROR": "1"
+            },
+            "cwd": "${workspaceFolder}"
+        },
     
     ]
 }

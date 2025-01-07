@@ -8,7 +8,7 @@ from omegaconf import OmegaConf, DictConfig
 import pyrootutils
 from pathlib import Path 
 
-from datamodule import HFDataModule, BirdSetDataModule
+from datamodule import BirdSetDataModule_JEPA
 from util.pylogger import get_pylogger
 from util.log_hparams import log_hyperparameters
 from build import instantiate_callbacks, build_model
@@ -45,15 +45,7 @@ def train(cfg: DictConfig):
     log.info("Setup datamodule")
 
 
-    if cfg.data.dataset.name == "XCM" or cfg.data.dataset.name == "XCL":
-        datamodule = BirdSetDataModule(
-            dataset_configs=cfg.data.dataset,
-            loader_configs=cfg.data.loaders,
-            transform_configs=cfg.data.transform,
-            sampling_rate=cfg.module.network.sampling_rate
-        )
-    else:
-        datamodule = HFDataModule(
+    datamodule = BirdSetDataModule_JEPA(
             dataset_configs=cfg.data.dataset,
             loader_configs=cfg.data.loaders,
             transform_configs=cfg.data.transform,

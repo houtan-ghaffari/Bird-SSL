@@ -25,35 +25,17 @@ root = pyrootutils.setup_root(
 _HYDRA_PARAMS = {
     "version_base": None,
     "config_path": str(root / "configs"),
-    "config_name": "pretrain.yaml"
+    "config_name": "finetune.yaml"
 }
 
 @hydra.main(**_HYDRA_PARAMS)
-def train(cfg: DictConfig):
-
-    #log.info("Using config: %s", OmegaConf.to_yaml(cfg))
-    log.info(f"Dataset directory:  <{os.path.abspath(cfg.paths.dataset_dir)}>")
-    log.info(f"Log directory:  <{os.path.abspath(cfg.paths.log_dir)}>")
-    log.info(f"Root directory:  <{os.path.abspath(cfg.paths.root_dir)}>")
-    log.info(f"Work directory:  <{os.path.abspath(cfg.paths.work_dir)}>")
-    log.info(f"Output directory:  <{os.path.abspath(cfg.paths.output_dir)}>")
-    #log.info(f"Model directory:  <{os.path.abspath(cfg.callbacks.model_checkpoint.dirpath)}>")
-
-    log.info("Seed everything with cfg.")
+def finetune(cfg: DictConfig):
+    log.info(f"Seed everything with {cfg.seed}")
     L.seed_everything(cfg.seed)
-
-    log.info("Setup datamodule")
-
-
-    if cfg.data.dataset.name == "XCM" or cfg.data.dataset.name == "XCL":
+    #torch.set_num_threads(12)
+    
+    if "birdset" in cfg.data.dataset.hf_path.lower(): # correct this later 
         datamodule = BirdSetDataModule(
-            dataset_configs=cfg.data.dataset,
-            loader_configs=cfg.data.loaders,
-            transform_configs=cfg.data.transform,
-            sampling_rate=cfg.module.network.sampling_rate
-        )
-    else:
-        datamodule = HFDataModule(
             dataset_configs=cfg.data.dataset,
             loader_configs=cfg.data.loaders,
             transform_configs=cfg.data.transform,
@@ -70,13 +52,29 @@ def train(cfg: DictConfig):
     log.info("Setup callbacks")
     callbacks = instantiate_callbacks(cfg["callbacks"])
                                       
-
     log.info("Setup trainer")
     trainer = L.Trainer(**cfg.trainer, callbacks=callbacks, logger=logger)
 
     log.info("Setup model")
     model = build_model(cfg.module)
 
+    pretrained_weights_path = cfg.module.network.get("pretrained_weights_path", None)
+
+    if pretrained_weights_path: 
+        log.info(f"Load pretrained weights from {pretrained_weights_path}")
+        model.load_pretrained_weights(pretrained_weights_path)
+
+    if cfg.module.network.get("freeze_backbone", False): # move this to the models!
+        log.info("Freezing backbone weights, only training head")
+        if cfg.module.network.name == "ConvNext":
+             for name, param in model.named_parameters():
+                if 'classifier' not in name:
+                    param.requires_grad = False
+        else:
+            for name, param in model.named_parameters():
+                if 'head' not in name:
+                    param.requires_grad = False
+                
     object_dict = {
         "cfg": cfg, 
         "datamodule": datamodule,
@@ -84,14 +82,23 @@ def train(cfg: DictConfig):
         "logger": logger,
         "trainer": trainer
     }
+
     if logger: 
         log.info("Logging hyperparameters")
         log_hyperparameters(object_dict)
 
-    log.info("Start training")
-    ckpt_path = cfg.get("ckpt_path", None)
-    print(f"Loading from checkpoint: {ckpt_path}")
-    trainer.fit(model=model, datamodule=datamodule, ckpt_path=ckpt_path)
+    if cfg.train: 
+        log.info("Start training")
+        trainer.fit(model=model, datamodule=datamodule) 
+                    #,ckpt_path="/home/lrauch/projects/birdMAE/logs/finetune/runs/audioset_balanced/VIT/2024-10-14_170415/model_checkpoints/last.ckpt")
+
+    if cfg.test:
+        log.info("Start testing")
+        trainer.test(model=model, datamodule=datamodule, ckpt_path="last")
 
 if __name__ == "__main__":
-    train()
+    finetune()
+
+
+    
+
