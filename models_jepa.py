@@ -693,12 +693,12 @@ class A_JEPA(L.LightningModule):
             for param_q, param_k in zip(self.encoder.parameters(), self.target_encoder.parameters()):
                 param_k.data.mul_(m).add_((1.-m) * param_q.detach().data)
             
-            self.log('m', m, on_step=True, on_epoch=True, prog_bar=False)
+            self.log('m', m, on_step=True, on_epoch=False, prog_bar=False)
 
         if self.wd_scheduler is not None:
             self.wd_scheduler.step()
         
-        self.log('wd', self.optimizers().param_groups[0]['weight_decay'], on_step=True, on_epoch=True, prog_bar=False)
+        self.log('wd', self.optimizers().param_groups[0]['weight_decay'], on_step=True, on_epoch=False, prog_bar=False)
         
         return loss
     
