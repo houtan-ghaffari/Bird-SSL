@@ -41,13 +41,6 @@ def finetune(cfg: DictConfig):
             transform_configs=cfg.data.transform,
             sampling_rate=cfg.module.network.sampling_rate
         )
-    else:
-        datamodule = HFDataModule(
-            dataset_configs=cfg.data.dataset,
-            loader_configs=cfg.data.loaders,
-            transform_configs=cfg.data.transform,
-            sampling_rate=cfg.module.network.sampling_rate
-    )
 
     if sys.gettrace():
          log.info("Debugging mode, no logger")
@@ -69,7 +62,7 @@ def finetune(cfg: DictConfig):
 
     if pretrained_weights_path: 
         log.info(f"Load pretrained weights from {pretrained_weights_path}")
-        model.load_pretrained_weights(pretrained_weights_path, cfg.data.dataset.name)
+        model.load_pretrained_weights(pretrained_weights_path)
 
     if cfg.module.network.get("freeze_backbone", False): # move this to the models!
         log.info("Freezing backbone weights, only training head")

@@ -8,10 +8,10 @@ class PatchEmbed_org(nn.Module):
     """
     def __init__(self, img_size=224, patch_size=16, in_chans=3, embed_dim=768):
         super().__init__()
-        img_size = to_2tuple(img_size)
+        img_size = to_2tuple(img_size) # audio mae used: (target_length x 128) --> not sure why tbh
         patch_size = to_2tuple(patch_size)
         num_patches = (img_size[1] // patch_size[1]) * (img_size[0] // patch_size[0])
-        self.patch_hw = (img_size[1] // patch_size[1], img_size[0] // patch_size[0])
+        self.patch_hw = (img_size[1] // patch_size[1], img_size[0] // patch_size[0]) # number of patches height/width = 8/32
         self.img_size = img_size
         self.patch_size = patch_size
         self.num_patches = num_patches
@@ -19,7 +19,8 @@ class PatchEmbed_org(nn.Module):
         self.proj = nn.Conv2d(in_chans, embed_dim, kernel_size=patch_size, stride=patch_size)
 
     def forward(self, x):
-        B, C, H, W = x.shape #batch size, channels, height, width
+        B, C, H, W = x.shape #batch size, channels, height, width --> apparently sth else is expected???
+        x = x.permute(0,1,3,2) ###????
         x = self.proj(x) # 1, 1, 512, 128 -> 1, 768, 32, 8 (batch, 768 channel, 32 height, 8 width)
         x = x.flatten(2) # 1, 768, 32, 8 -> 1, 768, 256
         x = x.transpose(1, 2) # 1, 768, 256 -> 1, 256, 768

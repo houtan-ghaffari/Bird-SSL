@@ -31,12 +31,11 @@ pos_trainable: False
 #pretrained_weights_path_: /home/lrauch/mnt_check/pretrain_xcl_wave_large/runs/XCL/AudioMAE/2024-11-24_142906/callback_checkpoints/AudioMAE_XCL_epoch=59.ckpt # <-- part of best
 #pretrained_weights_path_: /home/lrauch/mnt_check/pretrain_xcl_wave_large/runs/XCL/AudioMAE/2024-12-22_012826/callback_checkpoints/AudioMAE_XCL_epoch=54.ckpt
 #pretrained_weights_path_: /home/lrauch/mnt_check/pretrain_xcl_wave_large/runs/XCL/AudioMAE/2024-12-24_103957/callback_checkpoints/AudioMAE_XCL_epoch=54.ckpt <--- swinv2
-pretrained_weights_path: /home/lrauch/AudioMAE_XCL_03_permute_19.ckpt
+pretrained_weights_path: /home/lrauch/mnt_check/pretrain_xcl_wave_huge/runs/XCL/AudioMAE/2025-01-03_193352/callback_checkpoints/AudioMAE_XCL_epoch=99.ckpt
 target_length: ${data.dataset.target_length}
-#pretrained_weights_path_: /home/lrauch/mnt_check/finetune_xcl/runs/XCL/VIT/2025-01-06_103326/callback_checkpoints/VIT_XCL_epoch=04.ckpt
 mask2d: ${data.transform.mask2d}
 mask_t_prob: ${data.transform.mask_t_prob}
 mask_f_prob: ${data.transform.mask_f_prob}
 freeze_backbone: false
 
-#2025-01-03_193352
+#

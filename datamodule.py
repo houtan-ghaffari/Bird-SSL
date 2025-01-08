@@ -339,3 +339,134 @@ class BirdSetDataModule(HFDataModule):
 
             self.test_data.set_format("numpy", columns=self.columns, output_all_columns=False)
             self.test_data.set_transform(self.test_transform)
+
+
+from util.mask_jepa import apply_masks, MaskCollator
+
+
+class BirdSetDataModule_JEPA(HFDataModule):
+    def __init__(
+            self, 
+            dataset_configs: DictConfig, 
+            loader_configs: DictConfig, 
+            transform_configs: DictConfig, 
+            sampling_rate: int
+            ):
+        super().__init__(
+            dataset_configs, 
+            loader_configs, 
+            transform_configs, 
+            sampling_rate)
+        
+        self.train_transform = BirdSetTrainTransform(
+            transform_params=transform_configs,
+            sampling_rate=sampling_rate,
+            target_length=dataset_configs.target_length,
+            mean=dataset_configs.mean,
+            std=dataset_configs.std,
+            columns = dataset_configs.columns,
+            clip_duration = dataset_configs.clip_duration)
+        
+        self.val_transform = EvalTransform(
+            transform_params=transform_configs,
+            sampling_rate=sampling_rate,
+            target_length=dataset_configs.target_length,
+            mean=dataset_configs.mean,
+            std=dataset_configs.std,
+            columns = dataset_configs.columns,
+            clip_duration = dataset_configs.clip_duration
+        )
+
+        self.test_transform = EvalTransform(
+            transform_params=transform_configs,
+            sampling_rate=sampling_rate,
+            target_length=dataset_configs.target_length,
+            mean=dataset_configs.mean,
+            std=dataset_configs.std,
+            columns = dataset_configs.columns,
+            clip_duration = dataset_configs.clip_duration
+        )
+
+        mask_configs = transform_configs.mask_configs
+        self.mask_collator = MaskCollator(
+            input_size=mask_configs.input_size,
+            patch_size=mask_configs.patch_size,
+            pred_mask_scale=mask_configs.pred_mask_scale,
+            enc_mask_scale=mask_configs.enc_mask_scale,
+            aspect_ratio=mask_configs.aspect_ratio,
+            nenc=mask_configs.nenc,
+            npred=mask_configs.npred,
+            min_keep=mask_configs.min_keep,
+            allow_overlap=mask_configs.allow_overlap,
+        )
+
+        self.train_loader_configs = loader_configs.train
+        self.val_loader_configs = loader_configs.val
+        self.test_loader_configs = loader_configs.test
+
+    def setup(self, stage:str) -> None: 
+        if stage == "fit" or stage is None: 
+            if self.saved_images:
+                self.train_data = load_from_disk(f"{self.saved_images}/train")
+                self.train_data.set_transform(self.train_image_transform)
+                self.val_data = None
+
+                try: 
+                    self.val_data = load_from_disk(f"{self.saved_images}/test")
+                    self.val_data.set_transform(self.val_image_transform) # improve!!
+                except: 
+                    print("no test in saved images")
+            else:
+                self.train_data = load_from_disk(f"{self.save_to_disk}/train")
+                self.val_data = None
+
+                if self.hf_name != "XCM" and self.hf_name != "XCL":
+                    print("no val in xc")
+                    self.val_data = load_from_disk(f"{self.save_to_disk}/valid")
+            
+                self.train_data.set_format("numpy", columns=self.columns, output_all_columns=False)
+                #self.train_data = self.train_data.cast_column("audio", Audio(sampling_rate=self.sampling_rate, mono=True, decode=True))
+                self.train_data.set_transform(self.train_transform)
+                #self.train_data = self.train_data.select(range(100))
+
+                if self.val_data:
+                    self.val_data.set_format("numpy", columns=self.columns, output_all_columns=False)
+                    #self.val_data = self.val_data.cast_column("audio", Audio(sampling_rate=self.sampling_rate, mono=True, decode=True))
+                    self.val_data.set_transform(self.val_transform)
+                    
+                if self.test_in_val == True: # not nice, only for as
+                    self.val_data = load_from_disk(f"{self.save_to_disk}/test")
+                    self.val_data.set_format("numpy", columns=self.columns, output_all_columns=False)
+                    self.val_data.set_transform(self.val_transform)
+
+        
+        if stage == "test": 
+            self.test_data = load_from_disk(f"{self.save_to_disk}/test")
+
+            self.test_data.set_format("numpy", columns=self.columns, output_all_columns=False)
+            self.test_data.set_transform(self.test_transform)
+    
+    def train_dataloader(self) -> DataLoader:
+        return DataLoader(
+            self.train_data,
+            num_workers=self.train_loader_configs.num_workers,
+            batch_size=self.train_loader_configs.batch_size,
+            shuffle=self.train_loader_configs.shuffle,
+            drop_last=True,
+            collate_fn=self.mask_collator
+        )
+    def val_dataloader(self) -> DataLoader:
+        return DataLoader(
+            self.val_data,
+            num_workers=self.val_loader_configs.num_workers,
+            batch_size=self.val_loader_configs.batch_size,
+            shuffle=self.val_loader_configs.shuffle
+        )
+    
+    def test_dataloader(self) -> DataLoader:
+        return DataLoader(
+            self.test_data,
+            num_workers=self.test_loader_configs.num_workers,
+            batch_size=self.test_loader_configs.batch_size,
+            shuffle=self.test_loader_configs.shuffle
+        )

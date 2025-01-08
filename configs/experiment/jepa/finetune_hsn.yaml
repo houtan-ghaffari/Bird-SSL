@@ -5,7 +5,7 @@ defaults:
   - override /data/loaders: esc50
   - override /data/transform: melbank_birdset
   - override /logger: mlflow
-  - override /module/network: vit_base_16.yaml
+  - override /module/network: vit_base_14_ftjepa.yaml
   #- override /module/network: vit_base_16.yaml
   #- override /module/network: convnext.yaml
   - override /module/optimizer: adamw
@@ -23,7 +23,7 @@ train: true
 test: true
 
 logger:
-  experiment_name: overnight_hsn
+  experiment_name: test
 
 data:
   loaders:

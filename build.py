@@ -1,6 +1,7 @@
 import hydra
 from omegaconf import DictConfig, OmegaConf
 from models import AudioMAE, VIT, ConvNext
+from models_jepa import A_JEPA, VIT_JEPA
 from util import pylogger
 import lightning as L
 log = pylogger.get_pylogger(__name__)
@@ -68,6 +69,35 @@ def build_model(cfg_module: DictConfig):
             scheduler=cfg_module.scheduler,
             loss=cfg_module.loss,
             metric_cfg=cfg_module.metric  
+        )
+    elif cfg_module.network.name == "A_JEPA":
+        module = A_JEPA(
+            cfg_encoder=cfg_module.network.encoder,
+            cfg_predictor=cfg_module.network.predictor,
+            cfg_optimizer=cfg_module.optimizer,
+        )
+    elif cfg_module.network.name == "VIT_JEPA":
+        module = VIT_JEPA(
+            img_size=cfg_module.network.img_size,
+            patch_size=cfg_module.network.patch_size,
+            in_chans=cfg_module.network.in_chans,
+            embed_dim=cfg_module.network.embed_dim,
+            mlp_ratio=cfg_module.network.mlp_ratio,
+            qkv_bias=cfg_module.network.qkv_bias,
+            num_heads=cfg_module.network.num_heads,
+            depth=cfg_module.network.depth,
+            pretrained_weights_path=cfg_module.network.pretrained_weights_path,
+            num_classes=cfg_module.network.num_classes,
+            optimizer=cfg_module.optimizer,
+            scheduler=cfg_module.scheduler,
+            loss=cfg_module.loss,
+            metric_cfg=cfg_module.metric,
+            drop_rate=cfg_module.network.drop_rate,
+            qk_scale=cfg_module.network.qk_scale,
+            attn_drop_rate=cfg_module.network.attn_drop_rate,
+            drop_path_rate=cfg_module.network.drop_path_rate,
+            init_std=cfg_module.network.init_std,
+            target_length=cfg_module.network.target_length,
         )
     else:
         raise ValueError(f"Model {cfg_module.network.name} not found")

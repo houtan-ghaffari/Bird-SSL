@@ -16,10 +16,12 @@ from timm.models.layers import trunc_normal_
 from functools import partial
 from util.pos_embed import get_2d_sincos_pos_embed, get_2d_sincos_pos_embed_flexible
 from util.patch_embed import PatchEmbed_new, PatchEmbed_org
+from util.lamb import LAMB
 from transformers import get_cosine_schedule_with_warmup
 import math
 from torch.optim.lr_scheduler import _LRScheduler
 from util.lr_decay import param_groups_lrd
+
 
 class MAE_Encoder(nn.Module):
     def __init__(self, 
@@ -51,7 +53,7 @@ class MAE_Encoder(nn.Module):
         self.norm = norm_layer(embed_dim)
     
     def random_masking(self, x, mask_ratio):
-        N, L, D = x.shape  # batch, length, dim
+        N, L, D = x.shape  # batch, length(number of patches), dim
         len_keep = int(L * (1 - mask_ratio))
         
         noise = torch.rand(N, L, device=x.device)  # noise in [0, 1]
@@ -277,16 +279,16 @@ class AudioMAE(L.LightningModule):
     def initialize_weights(self):
         # Initialize encoder positional embeddings
         pos_embed = get_2d_sincos_pos_embed_flexible(
-            self.encoder.pos_embed.shape[-1], 
-            self.encoder.patch_embed.patch_hw, 
+            self.encoder.pos_embed.shape[-1], # embedding dim
+            self.encoder.patch_embed.patch_hw, # 8,32
             cls_token=True
         )
         self.encoder.pos_embed.data.copy_(torch.from_numpy(pos_embed).float().unsqueeze(0))
 
         # Initialize decoder positional embeddings
         decoder_pos_embed = get_2d_sincos_pos_embed_flexible(
-            self.decoder.decoder_pos_embed.shape[-1], 
-            self.encoder.patch_embed.patch_hw, 
+            self.decoder.decoder_pos_embed.shape[-1], # embedding_dim
+            self.encoder.patch_embed.patch_hw,  # 8,32
             cls_token=True
         )
         self.decoder.decoder_pos_embed.data.copy_(torch.from_numpy(decoder_pos_embed).float().unsqueeze(0))
@@ -509,7 +511,7 @@ class VIT(L.LightningModule, VisionTransformer):
         
         VisionTransformer.__init__(
             self,
-            img_size = (img_size_x, img_size_y),
+            img_size = (img_size_x, img_size_y), ###test!!
             patch_size = patch_size,
             in_chans = in_chans,
             embed_dim = embed_dim,
@@ -572,6 +574,7 @@ class VIT(L.LightningModule, VisionTransformer):
 
     def forward_features(self, x):
         B = x.shape[0]
+        #x = x.permute(0,1,3,2) # test!!
         x = self.patch_embed(x) # batch, patch, embed
         x = x + self.pos_embed[:, 1:, :] # strange
         cls_token = self.cls_token + self.pos_embed[:, :1, :]
@@ -735,7 +738,6 @@ class VIT(L.LightningModule, VisionTransformer):
             self.log(f'test_{name}', metric, on_epoch=True, prog_bar=True)
 
     def configure_optimizers(self):
-
         #heuristic:
         # eff_batch_size = self.trainer.accumulate_grad_batches * self.trainer.num_devices * self.train_batch_size
         # self.optimizer_cfg["lr"] = self.optimizer_cfg["lr"] * eff_batch_size / 48
@@ -759,6 +761,8 @@ class VIT(L.LightningModule, VisionTransformer):
             self.optimizer = hydra.utils.instantiate(
                 self.optimizer_cfg, 
                 params=self.parameters())
+            # print("LAMB")
+            # self.optimizer = LAMB(self.parameters(), lr=3e-4)
     
         if self.scheduler_cfg: 
             num_training_steps = self.trainer.estimated_stepping_batches
@@ -790,6 +794,7 @@ class VIT(L.LightningModule, VisionTransformer):
     
     def load_pretrained_weights(self, pretrained_weights_path, dataset_name): 
         img_size = (self.target_length, 128)
+        #img_size = (128, self.target_length) # should be correcter, but not pretrained this way
 
         if self.target_length == 512: #esc50, hsn, 5 seconds
             #num_patches = 512 # audioset
@@ -823,7 +828,7 @@ class VIT(L.LightningModule, VisionTransformer):
 
 
             for k in ['head.weight', 'head.bias']:
-                if k in pretrained_state_dict and pretrained_state_dict[k].shape != self.state_dict[k].shape:
+                if k in pretrained_state_dict: #and pretrained_state_dict[k].shape != self.state_dict[k].shape:
                     print(f"Removing key {k} from pretrained checkpoint")
                     del pretrained_state_dict[k]
             
@@ -1105,3 +1110,4 @@ class ConvNext(L.LightningModule):
         
         return {"optimizer": self.optimizer}      
     
+

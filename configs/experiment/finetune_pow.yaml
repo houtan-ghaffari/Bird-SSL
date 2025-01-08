@@ -1,11 +1,11 @@
 # @package _global_
 defaults:
   - override /callbacks: default
-  - override /data/dataset: HSN
+  - override /data/dataset: POW
   - override /data/loaders: esc50
   - override /data/transform: melbank_birdset
   - override /logger: mlflow
-  - override /module/network: vit_base_16.yaml
+  - override /module/network: vit_large_16.yaml
   #- override /module/network: vit_base_16.yaml
   #- override /module/network: convnext.yaml
   - override /module/optimizer: adamw
@@ -17,13 +17,13 @@ defaults:
 
 seed: 42
 start_time: ${now:%Y-%m-%d_%H%M%S}
-task_name: "finetune_hsn"
+task_name: "finetune_pow"
 
 train: true
 test: true
 
 logger:
-  experiment_name: overnight_hsn
+  experiment_name: overnight_pow
 
 data:
   loaders:
@@ -59,6 +59,6 @@ module:
       #layer_decay: 0.75
       layer_decay: 0.75
       #decay_type: inverse_normal
-      decay_type: inverse_normal
+      decay_type: right
       
 
