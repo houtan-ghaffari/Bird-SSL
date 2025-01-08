@@ -30,7 +30,6 @@ _HYDRA_PARAMS = {
 
 @hydra.main(**_HYDRA_PARAMS)
 def train(cfg: DictConfig):
-    torch.set_num_threads(12)
 
     #log.info("Using config: %s", OmegaConf.to_yaml(cfg))
     log.info(f"Dataset directory:  <{os.path.abspath(cfg.paths.dataset_dir)}>")

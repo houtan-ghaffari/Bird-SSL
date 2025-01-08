@@ -9,7 +9,7 @@ test_split: "test"
 test_size: null
 num_workers: 4
 #columns: ["filepath", "labels", "detected_events", "start_time", "end_time"]
-columns: ["filepath", "detected_events", "start_time", "end_time"]
+columns: ["filepath", "start_time", "end_time"]
 target_length: 512 #dopplung in melscale! change!
 mean: -7.2
 std: 4.43

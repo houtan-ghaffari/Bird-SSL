@@ -496,11 +496,6 @@ class BirdSetTrainTransform(TrainTransform):
         if self.spec_aug: # normally in birdset on the spectrograms, not on the fbanks at the end.
             fbank_features = self.spec_aug(fbank_features.permute(0,2,1))
             fbank_features = fbank_features.permute(0,2,1)
-
-
-        if self.spec_aug:
-            fbank_features = self.spec_aug(fbank_features.permute(0,2,1))
-            fbank_features = fbank_features.permute(0,2,1)
      
         # self.mixup_fn = SpecMixupN(
         #     num_mix=2,
