@@ -14,7 +14,7 @@ encoder:
     pos_trainable: false
     mlp_ratio: 4
 decoder:
-    mode: swinv2
+    mode: std
     embed_dim: 512
     depth: 12
     num_heads: 16

@@ -7,9 +7,9 @@ encoder:
     - 512
   patch_size: ${data.transform.mask_configs.patch_size}
   in_chans: 1
-  embed_dim: 768
-  depth: 12
-  num_heads: 12
+  embed_dim: 1024
+  depth: 24
+  num_heads: 16
   mlp_ratio: 4
   qkv_bias: true
   qk_scale: null

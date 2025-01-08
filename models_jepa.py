@@ -9,7 +9,6 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torchmetrics import MetricCollection
 from torch.optim.lr_scheduler import _LRScheduler
-from util.pos_embed import get_2d_sincos_pos_embed_flexible
 from util.mask_jepa import apply_masks, MaskCollator
 
 import lightning as L
@@ -55,6 +54,25 @@ def _no_grad_trunc_normal_(tensor, mean, std, a, b):
     
 def trunc_normal_(tensor, mean=0., std=1., a=-2., b=2.):
     return _no_grad_trunc_normal_(tensor, mean, std, a, b)
+
+
+def get_2d_sincos_pos_embed_flexible(embed_dim, grid_size, cls_token=False):
+    """
+    grid_size: int of the grid height and width
+    return:
+    pos_embed: [grid_size*grid_size, embed_dim] or [1+grid_size*grid_size, embed_dim] (w/ or w/o cls_token)
+    """
+    grid_h = np.arange(grid_size[0], dtype=float) # grid size[0] = 8
+    grid_w = np.arange(grid_size[1], dtype=float) # grid size[1] = 32
+    grid = np.meshgrid(grid_w, grid_h)  # here w goes first
+    grid = np.stack(grid, axis=0) # 2,8,32
+
+    grid = grid.reshape([2, 1, grid_size[0], grid_size[1]]) # 2,1,8.32
+    pos_embed = get_2d_sincos_pos_embed_from_grid(embed_dim, grid)
+    if cls_token:
+        pos_embed = np.concatenate([np.zeros([1, embed_dim]), pos_embed], axis=0)
+    return pos_embed # 267 (+cls) x 1024 (feature dim)
+
 
 def get_2d_sincos_pos_embed(embed_dim, grid_size, cls_token=False):
     """
@@ -215,9 +233,10 @@ class PatchEmbed(nn.Module):
         super().__init__()
         img_size = tuple(img_size)
         num_patches = (img_size[0] // patch_size) * (img_size[1] // patch_size)
-        self.img_size = img_size # 512 x 128
+        self.img_size = img_size # 128 x 512
         self.patch_size = patch_size # 14 x 14
         self.num_patches = num_patches # 324
+        self.patch_hw = (img_size[0] // patch_size, img_size[1] // patch_size)  # depends on image size order 9,36 when 14*14
         self.proj = nn.Conv2d(in_chans, embed_dim, kernel_size=patch_size, stride=patch_size)
 
     def forward(self, x):
@@ -283,6 +302,8 @@ class VisionTransformerPredictor(nn.Module):
     """ Vision Transformer """
     def __init__(
         self,
+        img_size,
+        patch_size,
         num_patches,
         embed_dim=768,
         predictor_embed_dim=384,
@@ -305,9 +326,16 @@ class VisionTransformerPredictor(nn.Module):
         # --
         self.predictor_pos_embed = nn.Parameter(torch.zeros(1, num_patches, predictor_embed_dim),
                                                 requires_grad=False)
-        predictor_pos_embed = get_2d_sincos_pos_embed(self.predictor_pos_embed.shape[-1],
-                                                      int(num_patches**.5),
-                                                      cls_token=False)
+        # predictor_pos_embed = get_2d_sincos_pos_embed(self.predictor_pos_embed.shape[-1],
+        #                                               int(num_patches**.5),
+        #                                            cls_token=False)
+        patch_hw = (img_size[0] // patch_size, img_size[1] // patch_size)
+        predictor_pos_embed = get_2d_sincos_pos_embed_flexible(
+            self.predictor_pos_embed.shape[-1],
+            patch_hw,
+            cls_token=False
+        )
+
         self.predictor_pos_embed.data.copy_(torch.from_numpy(predictor_pos_embed).float().unsqueeze(0))
         # --
         self.predictor_blocks = nn.ModuleList([
@@ -420,9 +448,14 @@ class VisionTransformer(nn.Module):
         num_patches = self.patch_embed.num_patches
         # --
         self.pos_embed = nn.Parameter(torch.zeros(1, num_patches, embed_dim), requires_grad=False)
-        pos_embed = get_2d_sincos_pos_embed(self.pos_embed.shape[-1],
-                                            int(self.patch_embed.num_patches**.5),
-                                            cls_token=False)
+        # pos_embed = get_2d_sincos_pos_embed(self.pos_embed.shape[-1],
+        #                                     int(self.patch_embed.num_patches**.5),
+        #                                     cls_token=False)
+        pos_embed = get_2d_sincos_pos_embed_flexible(
+            self.pos_embed.shape[-1],
+            self.patch_embed.patch_hw,
+            cls_token=False
+        )
         self.pos_embed.data.copy_(torch.from_numpy(pos_embed).float().unsqueeze(0))
         # --
         dpr = [x.item() for x in torch.linspace(0, drop_path_rate, depth)]  # stochastic depth decay rule
@@ -538,7 +571,9 @@ class A_JEPA(L.LightningModule):
             p.requires_grad = False
 
         self.predictor = VisionTransformerPredictor(
+            img_size=cfg_encoder.img_size,
             num_patches=self.encoder.patch_embed.num_patches,
+            patch_size=cfg_encoder.patch_size,
             embed_dim=cfg_encoder.embed_dim, 
             predictor_embed_dim=cfg_predictor.predictor_embed_dim,
             depth=cfg_predictor.depth,
@@ -573,6 +608,7 @@ class A_JEPA(L.LightningModule):
         print("base learning rate on 2048 was:", self.optimizer_cfg["lr"])
         self.optimizer_cfg["lr"] = self.optimizer_cfg["lr"] * eff_batch_size / 2048
         print("effective learning rate now:", self.optimizer_cfg["lr"])
+        self.optimizer_cfg["min_lr"] = self.optimizer_cfg["min_lr"] * eff_batch_size / 2048
 
         param_groups = [
         {
@@ -603,10 +639,17 @@ class A_JEPA(L.LightningModule):
         warmup_ratio = 0.013
         num_warmup_steps = num_training_steps * warmup_ratio
 
-        scheduler = get_cosine_schedule_with_warmup(
+        # scheduler = get_cosine_schedule_with_warmup(
+        #     optimizer=optimizer,
+        #     num_warmup_steps=num_warmup_steps,
+        #     num_training_steps=num_training_steps
+        # )
+
+        scheduler = CosineWarmupScheduler(
+            warmup_steps=num_warmup_steps,
+            total_steps=num_training_steps,
             optimizer=optimizer,
-            num_warmup_steps=num_warmup_steps,
-            num_training_steps=num_training_steps
+            min_lr=self.optimizer_cfg["min_lr"]
         )
 
         scheduler_dict = {
@@ -616,7 +659,15 @@ class A_JEPA(L.LightningModule):
         }
 
         num_epochs = self.trainer.max_epochs
-        ipe = int(num_training_steps / self.trainer.max_epochs) #iterations per epoch 
+        ipe = int(num_training_steps / self.trainer.max_epochs)
+
+        self.wd_scheduler = CosineWDSchedule(
+            optimizer=optimizer,
+            ref_wd=self.optimizer_cfg["weight_decay"],
+            final_wd=self.optimizer_cfg["final_wd"],
+            T_max=int(self.ipe_scale*num_epochs*ipe)
+        )
+
 
         self.momentum_scheduler = (self.ema[0] + i*(self.ema[1]-self.ema[0])/(ipe*num_epochs*self.ipe_scale)
                         for i in range(int(ipe*num_epochs*self.ipe_scale)+1))
@@ -641,7 +692,14 @@ class A_JEPA(L.LightningModule):
                 m = self.ema[1] 
             for param_q, param_k in zip(self.encoder.parameters(), self.target_encoder.parameters()):
                 param_k.data.mul_(m).add_((1.-m) * param_q.detach().data)
+            
+            self.log('m', m, on_step=True, on_epoch=True, prog_bar=False)
 
+        if self.wd_scheduler is not None:
+            self.wd_scheduler.step()
+        
+        self.log('wd', self.optimizers().param_groups[0]['weight_decay'], on_step=True, on_epoch=True, prog_bar=False)
+        
         return loss
     
     def forward_target(self, audio, masks_pred, masks_enc):
@@ -713,10 +771,8 @@ class VIT_JEPA(VisionTransformer,L.LightningModule):
             init_std=init_std,
         )
         
-        
         self.save_hyperparameters()
         
-
         self.optimizer = None
         self.optimizer_cfg = optimizer.target
         self.train_batch_size = optimizer.extras.train_batch_size
@@ -752,7 +808,10 @@ class VIT_JEPA(VisionTransformer,L.LightningModule):
         self.loss = hydra.utils.instantiate(loss)
 
         #add classification head
-        self.add_classification_head(drop_path=0.0)
+        #self.add_classification_head(drop_path=0.0)
+        self.head = nn.Linear(self.embed_dim, self.num_classes) # taken from timm
+        norm_layer = partial(nn.LayerNorm, eps=1e-6)
+        self.fc_norm = norm_layer(self.embed_dim)
         
     def configure_optimizers(self):
         optimizer = hydra.utils.instantiate(
@@ -760,12 +819,54 @@ class VIT_JEPA(VisionTransformer,L.LightningModule):
         )
         return {"optimizer": optimizer}
 
+    def forward_features(self, x):
+        x = self.patch_embed(x)
+        x = x + self.pos_embed
+        for blk in self.blocks:
+            x = blk(x)
+
+        #global pool
+        x = x.mean(dim=1)
+        features = self.fc_norm(x)
+
+        return features
+        
+
     def forward(self, x):
-        features = super().forward(x)
-        global_pool = features[:,1:,:].mean(dim=1)
-        output = self.head(global_pool)
+        features = self.forward_features(x)
+        output = self.head(features)
         return output
         
+
+
+    # def forward(self, x, masks=None):
+    #     if masks is not None:
+    #         if not isinstance(masks, list):
+    #             masks = [masks]
+
+    #     # -- patchify x
+    #     x = self.patch_embed(x)
+    #     B, N, D = x.shape # batch, number patches, feature_dim
+
+    #     # -- add positional embedding to x
+    #     pos_embed = self.interpolate_pos_encoding(x, self.pos_embed)
+    #     x = x + pos_embed
+
+    #     # -- mask x
+    #     if masks is not None:
+    #         x = apply_masks(x, masks)
+
+    #     # -- fwd prop
+    #     for i, blk in enumerate(self.blocks):
+    #         x = blk(x)
+
+    #     if self.norm is not None:
+    #         x = self.norm(x)
+
+    #     return x
+
+
+
     def training_step(self, batch, batch_idx):
         audio = batch["audio"]
         targets = batch["label"]
@@ -880,6 +981,14 @@ class VIT_JEPA(VisionTransformer,L.LightningModule):
             return {"optimizer": self.optimizer}   
 
     def load_pretrained_weights(self, pretrained_weights_path):
+        
+        img_size = (128, 512)
+        patch_size = self.patch_size
+        num_patches = (img_size[0] // patch_size) * (img_size[1] // patch_size)
+
+        self.patch_embed = PatchEmbed(img_size, patch_size, 1, self.embed_dim)
+        self.pos_embed = nn.Parameter(torch.zeros(1, num_patches, self.embed_dim), requires_grad=False)
+
         pre_state_dict = torch.load(pretrained_weights_path, map_location="cpu")["state_dict"]
         pretrained_state_dict = {}
         for key, value in pre_state_dict.items():
@@ -898,9 +1007,10 @@ class VIT_JEPA(VisionTransformer,L.LightningModule):
             # Add the modified key-value pair to the new state dict
             pretrained_state_dict[new_key] = value
         info = self.load_state_dict(pretrained_state_dict, strict=False)
-        #patch_hw = (self.img_size[1] // self.patch_size, self.img_size[0] // self.patch_size) 
-        #pos_embed = get_2d_sincos_pos_embed_flexible(self.pos_embed.size(-1), patch_hw, cls_token=False) # not trained, overwrite from sincos
-        #self.pos_embed.data = torch.from_numpy(pos_embed).float().unsqueeze(0) 
+
+        patch_hw = (img_size[0] // patch_size, img_size[1] // patch_size)
+        pos_embed = get_2d_sincos_pos_embed_flexible(self.pos_embed.size(-1), patch_hw, cls_token=False) # not trained, overwrite from sincos
+        self.pos_embed.data = torch.from_numpy(pos_embed).float().unsqueeze(0) 
         
     def add_classification_head(self, drop_path):
         # Add classification head to the model itself
@@ -944,3 +1054,34 @@ class CosineWarmupScheduler(_LRScheduler):
             lr *= lr_scale
             lrs.append(lr)
         return lrs
+
+
+class CosineWDSchedule(object):
+
+    def __init__(
+        self,
+        optimizer,
+        ref_wd,
+        T_max,
+        final_wd=0.
+    ):
+        self.optimizer = optimizer
+        self.ref_wd = ref_wd
+        self.final_wd = final_wd
+        self.T_max = T_max
+        self._step = 0.
+
+    def step(self):
+        self._step += 1
+        progress = self._step / self.T_max
+        new_wd = self.final_wd + (self.ref_wd - self.final_wd) * 0.5 * (1. + math.cos(math.pi * progress))
+
+        if self.final_wd <= self.ref_wd:
+            new_wd = max(self.final_wd, new_wd)
+        else:
+            new_wd = min(self.final_wd, new_wd)
+
+        for group in self.optimizer.param_groups:
+            if ('WD_exclude' not in group) or not group['WD_exclude']:
+                group['weight_decay'] = new_wd
+        return new_wd

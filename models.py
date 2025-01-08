@@ -53,7 +53,7 @@ class MAE_Encoder(nn.Module):
         self.norm = norm_layer(embed_dim)
     
     def random_masking(self, x, mask_ratio):
-        N, L, D = x.shape  # batch, length, dim
+        N, L, D = x.shape  # batch, length(number of patches), dim
         len_keep = int(L * (1 - mask_ratio))
         
         noise = torch.rand(N, L, device=x.device)  # noise in [0, 1]
@@ -280,16 +280,16 @@ class AudioMAE(L.LightningModule):
     def initialize_weights(self):
         # Initialize encoder positional embeddings
         pos_embed = get_2d_sincos_pos_embed_flexible(
-            self.encoder.pos_embed.shape[-1], 
-            self.encoder.patch_embed.patch_hw, 
+            self.encoder.pos_embed.shape[-1], # embedding dim
+            self.encoder.patch_embed.patch_hw, # 8,32
             cls_token=True
         )
         self.encoder.pos_embed.data.copy_(torch.from_numpy(pos_embed).float().unsqueeze(0))
 
         # Initialize decoder positional embeddings
         decoder_pos_embed = get_2d_sincos_pos_embed_flexible(
-            self.decoder.decoder_pos_embed.shape[-1], 
-            self.encoder.patch_embed.patch_hw, 
+            self.decoder.decoder_pos_embed.shape[-1], # embedding_dim
+            self.encoder.patch_embed.patch_hw,  # 8,32
             cls_token=True
         )
         self.decoder.decoder_pos_embed.data.copy_(torch.from_numpy(decoder_pos_embed).float().unsqueeze(0))
