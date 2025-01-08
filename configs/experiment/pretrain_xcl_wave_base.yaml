@@ -5,7 +5,7 @@ defaults:
   - override /data/loaders: audioset_balanced
   - override /data/transform: pretrain_melbank_birdset
   - override /logger: mlflow
-  - override /module/network: amae_vitlarge_16
+  - override /module/network: amae_vitbase_16
   - override /module/optimizer: adamw
   - override /module/scheduler: cosine
   - override /module/loss: mean_squared_error # remove this or improve

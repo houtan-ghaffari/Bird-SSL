@@ -3,16 +3,17 @@
 #SBATCH --ntasks-per-node=4
 #SBATCH --cpus-per-task=26
 #SBATCH --gres=gpu:4
-#SBATCH --mem=400gb
+#SBATCH --mem=450gb
 #SBATCH --partition=main
-#SBATCH --job-name=birdMAE_XCL_swinv2_large_0.5mix_stable_
-#SBATCH --output=/mnt/work/bird2vec/logs/birdMAE_XCL_swinv2_large_%N_%t_0.5mix_stable_.log
+#SBATCH --job-name=birdMAE_large_0.3mix_100ep_rep_permute
+#SBATCH --output=/mnt/work/bird2vec/logs/without_siwn/birdMAE_XCL_large_%N_%t_0.3mix_100ep_reproduce_permute.log
 #SBATCH --time=96:00:00
+###SBATCH --exclude=gpu-v100-3
 #SBATCH --nodelist=gpu-l40s-1
 
-#####SBATCH --exclude=gpu-v100-1,gpu-v100-2,gpu-v100-3,gpu-v100-4,gpu-a100-4,gpu-a100-1
-
+###SBATCH --exclude=gpu-v100-1,gpu-v100-2,gpu-v100-3,gpu-v100-4
 ######,gpu-a100-1,gpu-a100-2
+#####SBATCH --nodelist=gpu-a100-5
 ####SBATCH --array=3-3%3
 
 date;hostname;pwd
@@ -33,9 +34,14 @@ srun python train_ssl.py \
         trainer.devices=4 \
         +trainer.num_nodes=1 \
         trainer.precision=16-mixed \
-        trainer.strategy=ddp_find_unused_parameters_true \
-        data.transform.waveform_augmentations.mixup_wave.p=0.5 \
-        trainer.max_epochs=50 
+        data.transform.waveform_augmentations.mixup_wave.p=0.3 \
+        trainer.max_epochs=100 \
+        data.loaders.train.batch_size=256 \
+        trainer.gradient_clip_val=1.0 \
+        module.optimizer.target.lr=1e-4 \
+
+        #data.dataset.save_to_disk="/scratch/birdset/XCL/XCL_processed_500_2events_ogg_addsoundscapes-hsn" \
+        #trainer.strategy=ddp_find_unused_parameters_true \
         ##ckpt_path="/mnt/work/bird2vec/logs_pretrain_audioset_MAE/pretrain_xcl_large_swin/runs/XCL/AudioMAE/2024-12-12_162203/callback_checkpoints/last.ckpt"
         #ckpt_path="/mnt/work/bird2vec/logs_pretrain_audioset_MAE/pretrain_xcl_wave_large/runs/XCL/AudioMAE/2024-11-23_123703/callback_checkpoints/last.ckpt"
 

@@ -5,8 +5,8 @@
 #SBATCH --gres=gpu:2
 #SBATCH --mem=500gb
 #SBATCH --partition=main
-#SBATCH --job-name=birdMAE_XCL_base_0.3mix
-#SBATCH --output=/mnt/work/bird2vec/logs/birdMAE_XCL_large_%N_%t_0.3mix.log
+#SBATCH --job-name=birdMAE_XCL_large_nomix
+#SBATCH --output=/mnt/work/bird2vec/logs/without_siwn/birdMAE_XCL_large_%N_%t_nomix.log
 #SBATCH --time=96:00:00
 ###SBATCH --exclude=gpu-v100-3
 #SBATCH --nodelist=gpu-l40s-1
@@ -29,18 +29,18 @@ export CUDA_LAUNCH_BLOCKING=1
 export HYDRA_FULL_ERROR=1
 
 hostname
-srun python train_ssl.py experiment=pretrain_xcl_wave.yaml \
+srun python train_ssl.py \
+        experiment=pretrain_xcl_wave_large.yaml \
         trainer.devices=2 \
         +trainer.num_nodes=1 \
         trainer.precision=16-mixed \
-        trainer.strategy=ddp_find_unused_parameters_true \
-        data.transform.waveform_augmentations.mixup_wave.p=0.3 \
+        data.transform.waveform_augmentations.mixup_wave.p=0.0 \
         trainer.max_epochs=35 \
-        data.loaders.train.batch_size=128
-        #ckpt_path="/mnt/work/bird2vec/logs_pretrain_audioset_MAE/pretrain_xcl_wave/runs/XCL/AudioMAE/2024-11-29_132014/callback_checkpoints/last.ckpt"
-
-
-echo "Finished script."
+        data.loaders.train.batch_size=128 \
+        #data.dataset.save_to_disk="/scratch/birdset/XCL/XCL_processed_500_2events_ogg_addsoundscapes-hsn" \
+        #trainer.strategy=ddp_find_unused_parameters_true \
+        ##ckpt_path="/mnt/work/bird2vec/logs_pretrain_audioset_MAE/pretrain_xcl_large_swin/runs/XCL/AudioMAE/2024-12-12_162203/callback_checkpoints/last.ckpt"
+        #ckpt_path="/mnt/work/bird2vec/logs_pretrain_audioset_MAE/pretrain_xcl_wave_large/runs/XCL/AudioMAE/2024-11-23_123703/callback_checkpoints/last.ckpt"
 
 if [ $? -ne 0 ]; then
     echo "Error: srun failed. Sleeping for 2 hours..."
@@ -50,4 +50,4 @@ if [ $? -ne 0 ]; then
 fi
 
 
-# echo "Finished script."
+echo "Finished script."

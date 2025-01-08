@@ -40,9 +40,9 @@ data:
 
     
 trainer:
-  max_epochs: 50
+  max_epochs: 5
   limit_val_batches: 0.0 # no val
-  gradient_clip_val: 0.1
+  gradient_clip_val: 2
   precision: 16-mixed
   #strategy: auto
   strategy: ddp_find_unused_parameters_true
@@ -59,14 +59,14 @@ module:
       #lr: 1e-3
       #lr: 3e-4
       #lr: 3e-3
-      lr: 4e-4
+      lr: 1e-4
       #lr: 5e-4
       #lr: 1e-4S
       #weight_decay: 3e-2
       weight_decay: 3e-3
     extras:
       layer_decay: 0.75
-      decay_type: right
+      decay_type: inverse_normal
 
 callbacks:
   model_checkpoint:
@@ -74,6 +74,6 @@ callbacks:
     filename: ${module.network.name}_${data.dataset.name}_{epoch:02d}
     save_last: true
     save_weights_only: false
-    every_n_epochs: 10
+    every_n_epochs: 1
     save_top_k: -1
     save_on_train_epoch_end: true

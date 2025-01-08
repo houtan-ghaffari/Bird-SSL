@@ -172,7 +172,7 @@ class MAE_Decoder(nn.Module):
                         )
                     )
                 else:
-                    raise ValueError("Swin decoder mode not supported")
+                    raise ValueError("Decoder mode not supported")
 
             self.blocks = nn.ModuleList(decoder_modules)
 
@@ -202,8 +202,7 @@ class MAE_Decoder(nn.Module):
         if "swin" in self.decoder_mode: #!= 0 --> should be 0 in the original implementation
             B, L, D = x.shape # batch, length(patches), dim (decoder)
             x = x[:,1:,:]
-        # else:
-        #     print("Decoder mode is not swin")
+
     
         for blk in self.blocks:
             x = blk(x)

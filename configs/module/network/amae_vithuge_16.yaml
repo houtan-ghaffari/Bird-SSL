@@ -8,8 +8,8 @@ encoder:
     img_size_y: 128
     patch_size: 16
     in_chans: 1
-    embed_dim: 1024
-    depth: 24
+    embed_dim: 1280
+    depth: 32
     num_heads: 16
     pos_trainable: false
     mlp_ratio: 4
@@ -24,4 +24,3 @@ decoder:
     pos_trainable: false 
     patch_size: 16
     no_shift: false
-

@@ -1,12 +1,12 @@
 #!/usr/bin/zsh
 #SBATCH --nodes=1
-#SBATCH --ntasks-per-node=2
+#SBATCH --ntasks-per-node=4
 #SBATCH --cpus-per-task=26
-#SBATCH --gres=gpu:2
+#SBATCH --gres=gpu:4
 #SBATCH --mem=500gb
 #SBATCH --partition=main
-#SBATCH --job-name=finetune_XCL_swin_large_2
-#SBATCH --output=/mnt/work/bird2vec/logs/finetune/finetune_XCL_swin_large_2_%N_%t.log
+#SBATCH --job-name=finetune_XCL_large
+#SBATCH --output=/mnt/work/bird2vec/logs/finetune/finetune_XCL_large_%N_%t.log
 #SBATCH --time=96:00:00
 #SBATCH --nodelist=gpu-l40s-1
 
@@ -30,10 +30,10 @@ export HYDRA_FULL_ERROR=1
 hostname
 srun python finetune.py \
         experiment=finetune_xcl.yaml \
-        trainer.devices=2 \
-        +trainer.num_nodes=1 \
+        trainer.devices=4 \
         trainer.precision=bf16 \
-        module.network.pretrained_weights_path="/mnt/work/bird2vec/logs_pretrain_audioset_MAE/pretrain_xcl_large_swin/runs/XCL/AudioMAE/2024-12-04_205512/callback_checkpoints/last.ckpt"
+        module.network.pretrained_weights_path="'/mnt/work/bird2vec/logs_pretrain_audioset_MAE/pretrain_xcl_wave_large/runs/XCL/AudioMAE/2024-12-20_143556/callback_checkpoints/AudioMAE_XCL_epoch=99.ckpt'" \
+        #+trainer.num_nodes=1 \
         #ckpt_path="/mnt/work/bird2vec/logs_pretrain_audioset_MAE/pretrain_xcl_wave_large/runs/XCL/AudioMAE/2024-11-23_123703/callback_checkpoints/last.ckpt"
 
 # Capture the exit status of the Python script
