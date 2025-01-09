@@ -20,32 +20,32 @@
 
 
 #epochs=(04 09 14 19 24 29 34 39 44 49 54)
-epochs=(00 01 02 03 04)
-for ep in "${epochs[@]}"; do
-  echo "Running experiment with ep=${ep}"
+# epochs=(00 01 02 03 04)
+# for ep in "${epochs[@]}"; do
+#   echo "Running experiment with ep=${ep}"
   
-  sed -i "s|pretrained_weights_path:.*|pretrained_weights_path: /home/lrauch/mnt_check/finetune_xcl/runs/XCL/VIT/2025-01-06_103326/callback_checkpoints/VIT_XCL_epoch=${ep}.ckpt|g" configs/module/network/vit_large_16.yaml
+#   sed -i "s|pretrained_weights_path:.*|pretrained_weights_path: /home/lrauch/mnt_check/finetune_xcl/runs/XCL/VIT/2025-01-06_103326/callback_checkpoints/VIT_XCL_epoch=${ep}.ckpt|g" configs/module/network/vit_large_16.yaml
   
-  python finetune.py trainer.max_epochs=30 experiment=finetune_hsn.yaml +decoder_name=standard
-done
-
-# weight_decays=(3e-4)
-# # Define the learning rates you want to try
-# learning_rates=(4e-4 3e-4 2e-4 1e-4 5e-4 1e-3)
-# for decay in "${weight_decays[@]}"; do
-#   # Iterate over the learning rates and run the experiment
-#   for lr in "${learning_rates[@]}"; do
-#     echo "Running experiment with lr=${lr} and decay=${decay}"
-  
-#     # Convert the learning rate to a float for comparison
-#     lr_float=$(printf "%.10f" "$lr")
-
-#     python finetune.py \
-#       trainer.max_epochs=30 \
-#       experiment=finetune_hsn.yaml \
-#       module.optimizer.target.lr=$lr \
-#       module.optimizer.target.weight_decay=$decay \
-#       logger.experiment_name="overnight_hsn_base"
-#   done
+#   python finetune.py trainer.max_epochs=30 experiment=finetune_hsn.yaml +decoder_name=standard
 # done
+
+weight_decays=(3e-4)
+# Define the learning rates you want to try
+learning_rates=(4e-4 3e-4 2e-4 1e-4 5e-4 1e-3)
+for decay in "${weight_decays[@]}"; do
+  # Iterate over the learning rates and run the experiment
+  for lr in "${learning_rates[@]}"; do
+    echo "Running experiment with lr=${lr} and decay=${decay}"
+  
+    # Convert the learning rate to a float for comparison
+    lr_float=$(printf "%.10f" "$lr")
+
+    python finetune.py \
+      trainer.max_epochs=30 \
+      experiment=finetune_hsn.yaml \
+      module.optimizer.target.lr=$lr \
+      module.optimizer.target.weight_decay=$decay \
+      logger.experiment_name="overnight_hsn"
+  done
+done
 

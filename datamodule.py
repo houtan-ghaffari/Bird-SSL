@@ -394,6 +394,7 @@ class BirdSetDataModule_JEPA(HFDataModule):
             pred_mask_scale=mask_configs.pred_mask_scale,
             enc_mask_scale=mask_configs.enc_mask_scale,
             aspect_ratio=mask_configs.aspect_ratio,
+            aspect_ratio_context=mask_configs.aspect_ratio_context,
             nenc=mask_configs.nenc,
             npred=mask_configs.npred,
             min_keep=mask_configs.min_keep,

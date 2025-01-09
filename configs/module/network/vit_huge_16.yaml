@@ -5,37 +5,22 @@ img_size_x: ${data.dataset.target_length}
 img_size_y: 128
 patch_size: 16
 in_chans: 1
-embed_dim: 1024
+embed_dim: 1280
 global_pool: True
 mlp_ratio: 4
 qkv_bias: True
 eps: 1e-6
 num_heads: 16
-depth: 24
+depth: 32
 drop_path: 0.1
 num_classes: ${data.dataset.num_classes} 
 pos_trainable: False
-#pretrained_weights_path_: /home/lrauch/AudioMAE_XCL_epoch49_0.5mixup_swinv2_stable.ckpt
-#pretrained_weights_path_: /home/lrauch/AudioMAE_XCL_epoch=10_nomixup_l_swin.ckpt
-#pretrained_weights_path_: /home/lrauch/AudioMAE_XCL_epo20_nomixup_l_swin.ckpt
-#pretrained_weights_path_: /home/lrauch/AudioMAE_XCL_epoch=30_mixup0.7_l_swin.ckpt
-#pretrained_weights_path_: /home/lrauch/AudioMAE_XCL_epoch=99_mixup_l.ckpt
-#pretrained_weights_path_: /home/lrauch/AudioMAE_XCL_swinv2_nomix35.ckpt
-#pretrained_weights_path_: /home/lrauch/VIT_l_5epochs_XCL.ckpt
-#pretrained_weights_path_: /home/lrauch/AudioMAE_XCL_epoch=99_mixu0.5mixup_l.ckpt
-#pretrained_weights_path_: /home/lrauch/AudioMAE_XCL_2024-12-17-173525_ep25_0.3mix_large_soundscapes.ckpt
-#pretrained_weights_path_: /home/lrauch/AudioMAE_XCL_2024-12-17-132203ep25_0.3mix_large_nosoundscape.ckpt
-#pretrained_weights_path_: /home/lrauch/AudioMAE_XCL_2024-12-17-132203ep35_0.3mix_large_nosoundscape.ckpt
-#pretrained_weights_path_: /home/lrauch/mnt_check/pretrain_xcl_large/runs/XCL/AudioMAE/2024-12-18_204026/callback_checkpoints/last.ckpt
-#pretrained_weights_path_: /home/lrauch/mnt_check/pretrain_xcl_wave_large/runs/XCL/AudioMAE/2024-11-26_172328/callback_checkpoints/last.ckpt <-- best
-#pretrained_weights_path_: /home/lrauch/mnt_check/pretrain_xcl_wave_large/runs/XCL/AudioMAE/2024-11-24_142906/callback_checkpoints/AudioMAE_XCL_epoch=59.ckpt # <-- part of best
-#pretrained_weights_path_: /home/lrauch/mnt_check/pretrain_xcl_wave_large/runs/XCL/AudioMAE/2024-12-22_012826/callback_checkpoints/AudioMAE_XCL_epoch=54.ckpt
-#pretrained_weights_path_: /home/lrauch/mnt_check/pretrain_xcl_wave_large/runs/XCL/AudioMAE/2024-12-24_103957/callback_checkpoints/AudioMAE_XCL_epoch=54.ckpt <--- swinv2
-pretrained_weights_path: /home/lrauch/mnt_check/pretrain_xcl_wave_huge/runs/XCL/AudioMAE/2025-01-03_193352/callback_checkpoints/AudioMAE_XCL_epoch=99.ckpt
+
+#pretrained_weights_path: /home/lrauch/mnt_check/pretrain_xcl_wave_huge/runs/XCL/AudioMAE/2025-01-05_145126/callback_checkpoints/AudioMAE_XCL_epoch=94.ckpt
+pretrained_weights_path: /home/lrauch/AudioMAE_huge_XCL_ep99.ckpt
 target_length: ${data.dataset.target_length}
 mask2d: ${data.transform.mask2d}
 mask_t_prob: ${data.transform.mask_t_prob}
 mask_f_prob: ${data.transform.mask_f_prob}
 freeze_backbone: false
 
-#

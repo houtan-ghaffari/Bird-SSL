@@ -27,6 +27,7 @@ class MaskCollator(object):
         enc_mask_scale=(0.2, 0.8),
         pred_mask_scale=(0.2, 0.8),
         aspect_ratio=(0.3, 3.0),
+        aspect_ratio_context=(1, 4),
         nenc=1,
         npred=2,
         min_keep=4,
@@ -40,6 +41,7 @@ class MaskCollator(object):
         self.enc_mask_scale = enc_mask_scale
         self.pred_mask_scale = pred_mask_scale
         self.aspect_ratio = aspect_ratio
+        self.aspect_ratio_context = aspect_ratio_context
         self.nenc = nenc
         self.npred = npred
         self.min_keep = min_keep  # minimum number of patches to keep
@@ -58,15 +60,15 @@ class MaskCollator(object):
         # -- Sample block scale
         min_s, max_s = scale
         mask_scale = min_s + _rand * (max_s - min_s)
-        max_keep = int(self.height * self.width * mask_scale)
+        max_keep = int(self.height * self.width * mask_scale) # number of patches to keep (max! could be removed later)
         # -- Sample block aspect-ratio
         min_ar, max_ar = aspect_ratio_scale
         aspect_ratio = min_ar + _rand * (max_ar - min_ar)
         # -- Compute block height and width (given scale and aspect-ratio)
-        h = int(round(math.sqrt(max_keep * aspect_ratio)))
+        h = int(round(math.sqrt(max_keep * aspect_ratio))) #not done for context
         w = int(round(math.sqrt(max_keep / aspect_ratio)))
         while h >= self.height:
-            h -= 1
+            h -= 1 # automatic scaling: when the context image is too big in height, it is scaled down to max height 
         while w >= self.width:
             w -= 1
 
@@ -108,8 +110,8 @@ class MaskCollator(object):
         mask_complement = torch.ones((self.height, self.width), dtype=torch.int32)
         mask_complement[top:top+h, left:left+w] = 0
         # --
-        return mask, mask_complement
-
+        return mask, mask_complement # matrix with size of images: 9,36 --> mask 0 where patch
+    
     def __call__(self, batch):
         '''
         Create encoder and predictor masks when collating imgs into a batch
@@ -133,7 +135,9 @@ class MaskCollator(object):
         e_size = self._sample_block_size(
             generator=g,
             scale=self.enc_mask_scale,
-            aspect_ratio_scale=(1., 1.))
+            aspect_ratio_scale=self.aspect_ratio_context
+        )
+            #aspect_ratio_scale=(1., 1.)) # change! 
 
         collated_masks_pred, collated_masks_enc = [], []
         min_keep_pred = self.height * self.width
@@ -142,7 +146,7 @@ class MaskCollator(object):
 
             masks_p, masks_C = [], []
             for _ in range(self.npred):
-                mask, mask_C = self._sample_block_mask(p_size)
+                mask, mask_C = self._sample_block_mask(p_size) #mask = 56 preds, rest is keep 
                 masks_p.append(mask)
                 masks_C.append(mask_C)
                 min_keep_pred = min(min_keep_pred, len(mask))

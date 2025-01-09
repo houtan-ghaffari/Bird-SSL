@@ -15,6 +15,7 @@ import lightning as L
 from transformers import get_cosine_schedule_with_warmup
 
 def repeat_interleave_batch(x, B, repeat):
+    # so that is is done for every part of the embeddings that are required
     N = len(x) // B
     x = torch.cat([
         torch.cat([x[i*B:(i+1)*B] for _ in range(repeat)], dim=0)
@@ -320,7 +321,7 @@ class VisionTransformerPredictor(nn.Module):
         **kwargs
     ):
         super().__init__()
-        self.predictor_embed = nn.Linear(embed_dim, predictor_embed_dim, bias=True)
+        self.predictor_embed = nn.Linear(embed_dim, predictor_embed_dim, bias=True) #in: embedding dim from encoder (1024), out: embedding dim from predictor (384)
         self.mask_token = nn.Parameter(torch.zeros(1, 1, predictor_embed_dim))
         dpr = [x.item() for x in torch.linspace(0, drop_path_rate, depth)]  # stochastic depth decay rule
         # --
@@ -659,7 +660,7 @@ class A_JEPA(L.LightningModule):
         }
 
         num_epochs = self.trainer.max_epochs
-        ipe = int(num_training_steps / self.trainer.max_epochs)
+        ipe = int(num_training_steps / self.trainer.max_epochs) # steps per epoch
 
         self.wd_scheduler = CosineWDSchedule(
             optimizer=optimizer,
@@ -704,16 +705,16 @@ class A_JEPA(L.LightningModule):
     
     def forward_target(self, audio, masks_pred, masks_enc):
         with torch.no_grad():
-            h = self.target_encoder(audio) # batch, 324 patch, 768 features
+            h = self.target_encoder(audio) # batch, 324 patch, 768 features #encoded image from target encoder that is trained through ema
             h = F.layer_norm(h, (h.size(-1),))  # normalize over feature-dim
             B = len(h)
             # -- create targets (masked regions of h)
-            h = apply_masks(h, masks_pred)
-            h = repeat_interleave_batch(h, B, repeat=len(masks_enc))
-            return h # 16, 56, 768
+            h = apply_masks(h, masks_pred) # get the embeddings of the masked regions
+            h = repeat_interleave_batch(h, B, repeat=len(masks_enc)) #only 1
+            return h # 1024,56,1024 --> 4*batch_size= 4*256 = 1024 for every patch for every sample in batch
 
     def forward_context(self, audio, masks_enc, masks_pred):
-        z = self.encoder(audio, masks_enc)
+        z = self.encoder(audio, masks_enc) # encode context
         z = self.predictor(z, masks_enc, masks_pred)
         return z
 
@@ -722,8 +723,8 @@ class A_JEPA(L.LightningModule):
         return loss
 
     def forward(self, audio, masks_enc, masks_pred):
-        h = self.forward_target(audio, masks_pred, masks_enc)
-        z = self.forward_context(audio, masks_enc, masks_pred)
+        h = self.forward_target(audio, masks_pred, masks_enc) #create training samples embeddings for predictor
+        z = self.forward_context(audio, masks_enc, masks_pred) # create preds with encoder and predictor
         loss = self.forward_loss(z, h)
         return loss   
 
