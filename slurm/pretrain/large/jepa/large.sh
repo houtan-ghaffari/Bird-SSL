@@ -5,9 +5,9 @@
 #SBATCH --gres=gpu:4
 #SBATCH --mem=450gb
 #SBATCH --partition=main
-#SBATCH --job-name=birdJEPA_large_0.3mix_300ep
-#SBATCH --output=/mnt/work/bird2vec/logs/jepa/birdJEPA_XCL_large_%N_%t_0.3mix_300ep.log
-#SBATCH --time=130:00:00
+#SBATCH --job-name=birdJEPA_large_0.3mix_100ep
+#SBATCH --output=/mnt/work/bird2vec/logs/jepa/birdJEPA_XCL_large_%N_%t_0.3mix_100ep_n.log
+#SBATCH --time=100:00:00
 ###SBATCH --exclude=gpu-v100-3
 #SBATCH --nodelist=gpu-l40s-1
 
@@ -27,7 +27,7 @@ cd /mnt/home/lrauch/projects/birdMAE/
 
 export CUDA_LAUNCH_BLOCKING=1
 export HYDRA_FULL_ERROR=1
-python train_jepa_ssl.py experiment=jepa/pretrain_xcm.yaml
+
 hostname
 srun python train_jepa_ssl.py \
         experiment=jepa/pretrain_xcl.yaml \
@@ -35,8 +35,14 @@ srun python train_jepa_ssl.py \
         +trainer.num_nodes=1 \
         trainer.precision=16-mixed \
         data.transform.waveform_augmentations.mixup_wave.p=0.3 \
-        trainer.max_epochs=300 \
-        data.loaders.train.batch_size=256 \
+        trainer.max_epochs=100 \
+        data.loaders.train.batch_size=96 \
+        trainer.gradient_clip_val=1.5 \
+        module.optimizer.target.lr=5e-4
+        #data.loaders.train.batch_size=512 \
+        #module.optimizer.target.lr=1e-3 \
+        
+
         ##ckpt_path="/mnt/work/bird2vec/logs_pretrain_audioset_MAE/pretrain_xcl_large_swin/runs/XCL/AudioMAE/2024-12-12_162203/callback_checkpoints/last.ckpt"
         #ckpt_path="/mnt/work/bird2vec/logs_pretrain_audioset_MAE/pretrain_xcl_wave_large/runs/XCL/AudioMAE/2024-11-23_123703/callback_checkpoints/last.ckpt"
 
