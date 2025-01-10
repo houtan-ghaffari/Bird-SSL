@@ -5,9 +5,9 @@ img_size:
  - 512
 patch_size: 14
 in_chans: 1
-embed_dim: 768
-depth: 12
-num_heads: 12
+embed_dim: 1024
+depth: 24
+num_heads: 16
 mlp_ratio: 4
 qkv_bias: true
 qk_scale: null
@@ -22,5 +22,6 @@ target_length: ${data.dataset.target_length}
 #pretrained_weights_path: /home/lrauch/projects/birdMAE/logs/pretrain_xcm_jepa/runs/XCM/A_JEPA/2025-01-08_114405/callback_checkpoints/A_JEPA_XCM_epoch=01.ckpt
 #pretrained_weights_path: null
 #pretrained_weights_path: /home/lrauch/projects/birdMAE/logs/pretrain_xcm_jepa/runs/XCM/A_JEPA/2025-01-07_161741/callback_checkpoints/A_JEPA_XCM_epoch=99.ckpt
-pretrained_weights_path: /home/lrauch/A_JEPA_XCM_ep99.ckpt
+#pretrained_weights_path: /home/lrauch/projects/birdMAE/logs/pretrain_xcm_jepa/runs/XCM/A_JEPA/2025-01-09_125456/callback_checkpoints/A_JEPA_XCM_epoch=54.ckpt
+pretrained_weights_path: /home/lrauch/mnt_check/pretrain_xcl_jepa/runs/XCL/A_JEPA/2025-01-08_182341/callback_checkpoints/A_JEPA_XCL_epoch=14.ckpt
 #/home/lrauch/projects/birdMAE/logs/pretrain_xcm_jepa/runs/XCM/A_JEPA/2025-01-07_161741

@@ -479,7 +479,7 @@ class AudioMAE_FT(L.LightningModule):
         self.log('learning_rate', lr, prog_bar=True)
 
 
-class VIT(L.LightningModule, VisionTransformer):
+class VIT(L.LightningModule,VisionTransformer):
 
     def __init__(self, 
                  img_size_x,
@@ -835,6 +835,7 @@ class VIT(L.LightningModule, VisionTransformer):
             info = self.load_state_dict(pretrained_state_dict, strict=False)
 
             patch_hw = (img_size[1] // 16, img_size[0] // 16) # 16=patchsize
+            #patch_hw = (img_size[0] // 16, img_size[1] // 16) 
             pos_embed = get_2d_sincos_pos_embed_flexible(self.pos_embed.size(-1), patch_hw, cls_token=True) # not trained, overwrite from sincos
             self.pos_embed.data = torch.from_numpy(pos_embed).float().unsqueeze(0) 
 

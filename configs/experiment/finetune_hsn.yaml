@@ -5,7 +5,7 @@ defaults:
   - override /data/loaders: esc50
   - override /data/transform: melbank_birdset
   - override /logger: mlflow
-  - override /module/network: vit_huge_16.yaml
+  - override /module/network: vit_large_16.yaml
   #- override /module/network: vit_base_16.yaml
   #- override /module/network: convnext.yaml
   - override /module/optimizer: adamw
@@ -29,8 +29,8 @@ data:
   loaders:
     train: 
       num_workers: 16
-      #batch_size: 64
-      batch_size: 20
+      batch_size: 64
+      #batch_size: 20
       shuffle: true
       drop_last: true
 
@@ -51,6 +51,9 @@ module:
       #lr: 1e-3
       #lr: 3e-4
       #lr: 3e-3
+      #lr: 3e-4
+      #lr: 5e-5
+      #lr: 5e-4
       lr: 3e-4
       #lr: 5e-4
       #lr: 1e-4
@@ -59,8 +62,8 @@ module:
       
     extras:
       #layer_decay: 0.75
-      layer_decay: 0.75
+      layer_decay: null
       #decay_type: inverse_normal
-      decay_type: right
+      decay_type: inverse_normal
       
 

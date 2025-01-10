@@ -237,7 +237,7 @@ class PatchEmbed(nn.Module):
         self.img_size = img_size # 128 x 512
         self.patch_size = patch_size # 14 x 14
         self.num_patches = num_patches # 324
-        self.patch_hw = (img_size[0] // patch_size, img_size[1] // patch_size)  # depends on image size order 9,36 when 14*14
+        self.patch_hw = (img_size[0] // patch_size, img_size[1] // patch_size)  #  on image size order 9,36 when 14*14
         self.proj = nn.Conv2d(in_chans, embed_dim, kernel_size=patch_size, stride=patch_size)
 
     def forward(self, x):
@@ -981,7 +981,7 @@ class VIT_JEPA(VisionTransformer,L.LightningModule):
             
             return {"optimizer": self.optimizer}   
 
-    def load_pretrained_weights(self, pretrained_weights_path):
+    def load_pretrained_weights(self, pretrained_weights_path): # jepa base has 85_mill_params
         
         img_size = (128, 512)
         patch_size = self.patch_size
