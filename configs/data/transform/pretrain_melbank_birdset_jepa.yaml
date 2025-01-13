@@ -43,11 +43,12 @@ mask_configs:
   aspect_ratio: # little bit less because of wider 128x512
     #- 0.75
     #- 1.5
-    - 0.5
-    - 1.2
+    - 0.75
+    - 1.5
   aspect_ratio_context:
-    - 0.25
-    - 0.25
+    - 1.0
+    - 1.0
+
   nenc: 1 # encoder masks
   npred: 4 # prediction masks
   min_keep: 1

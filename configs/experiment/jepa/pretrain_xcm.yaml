@@ -5,7 +5,7 @@ defaults:
   - override /data/loaders: audioset_balanced
   - override /data/transform: pretrain_melbank_birdset_jepa
   - override /logger: mlflow
-  - override /module/network: jepa_vitlarge_14
+  - override /module/network: jepa_vitbase_14
   - override /module/optimizer: jepa
   - override /paths: workstation
   - override /trainer: single_gpu
@@ -26,6 +26,9 @@ data:
     waveform_augmentations: 
       mixup_wave:
         p: 0.0
+    mask_configs:
+      patch_size: 14
+
 
 logger:
   experiment_name: ${task_name}

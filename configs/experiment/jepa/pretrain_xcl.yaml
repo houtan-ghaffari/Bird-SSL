@@ -5,7 +5,7 @@ defaults:
   - override /data/loaders: audioset_balanced
   - override /data/transform: pretrain_melbank_birdset_jepa
   - override /logger: mlflow
-  - override /module/network: jepa_vitlarge_14
+  - override /module/network: jepa_vitbase_14
   - override /module/optimizer: jepa
   - override /paths: cluster
   - override /trainer: multi_gpu
@@ -54,6 +54,7 @@ module:
       layer_decay: 0.0
   network:
     sampling_rate: 32_000 
+    
 
 callbacks:
   model_checkpoint:

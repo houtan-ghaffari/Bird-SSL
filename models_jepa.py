@@ -502,8 +502,8 @@ class VisionTransformer(nn.Module):
         B, N, D = x.shape # batch, number patches, feature_dim
 
         # -- add positional embedding to x
-        pos_embed = self.interpolate_pos_encoding(x, self.pos_embed)
-        x = x + pos_embed
+        #pos_embed = self.interpolate_pos_encoding(x, self.pos_embed)
+        x = x + self.pos_embed
 
         # -- mask x
         if masks is not None:

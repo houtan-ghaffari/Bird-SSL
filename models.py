@@ -826,8 +826,8 @@ class VIT(L.LightningModule,VisionTransformer):
             else:
                 num_patches = 512 # audioset
 
-            #self.patch_embed = PatchEmbed(img_size, 16, 1, self.embed_dim)
-            self.patch_embed = PatchEmbed_org((img_size[1], img_size[0]), 16, 1, self.embed_dim)
+            self.patch_embed = PatchEmbed(img_size, 16, 1, self.embed_dim)
+            #self.patch_embed = PatchEmbed_org(img_size, 16, 1, self.embed_dim)
             self.pos_embed = nn.Parameter(torch.zeros(1, num_patches + 1, self.embed_dim), requires_grad=False) #to load pretrained pos embed
             try:
                 pre_state_dict = torch.load(pretrained_weights_path, map_location="cpu")["model"]

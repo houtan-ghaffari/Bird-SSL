@@ -20,7 +20,7 @@ class PatchEmbed_org(nn.Module):
 
     def forward(self, x):
         B, C, H, W = x.shape #batch size, channels, height, width --> apparently sth else is expected???
-        x = x.permute(0,1,3,2) ###????
+       # x = x.permute(0,1,3,2) ###????
         x = self.proj(x) # 1, 1, 512, 128 -> 1, 768, 32, 8 (batch, 768 channel, 32 height, 8 width)
         x = x.flatten(2) # 1, 768, 32, 8 -> 1, 768, 256
         x = x.transpose(1, 2) # 1, 768, 256 -> 1, 256, 768
