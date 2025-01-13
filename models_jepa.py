@@ -834,7 +834,10 @@ class VIT_JEPA(VisionTransformer,L.LightningModule):
         
 
     def forward(self, x):
-        features = self.forward_features(x)
+        features = super().forward(x)
+        features = features.mean(dim=1)
+        #features = self.fc_norm()
+        #features = self.forward_features(x)
         output = self.head(features)
         return output
         
@@ -987,8 +990,8 @@ class VIT_JEPA(VisionTransformer,L.LightningModule):
         patch_size = self.patch_size
         num_patches = (img_size[0] // patch_size) * (img_size[1] // patch_size)
 
-        self.patch_embed = PatchEmbed(img_size, patch_size, 1, self.embed_dim)
-        self.pos_embed = nn.Parameter(torch.zeros(1, num_patches, self.embed_dim), requires_grad=False)
+        # self.patch_embed = PatchEmbed(img_size, patch_size, 1, self.embed_dim)
+        # self.pos_embed = nn.Parameter(torch.zeros(1, num_patches, self.embed_dim), requires_grad=False)
 
         pre_state_dict = torch.load(pretrained_weights_path, map_location="cpu")["state_dict"]
         pretrained_state_dict = {}
@@ -1009,9 +1012,9 @@ class VIT_JEPA(VisionTransformer,L.LightningModule):
             pretrained_state_dict[new_key] = value
         info = self.load_state_dict(pretrained_state_dict, strict=False)
 
-        patch_hw = (img_size[0] // patch_size, img_size[1] // patch_size)
-        pos_embed = get_2d_sincos_pos_embed_flexible(self.pos_embed.size(-1), patch_hw, cls_token=False) # not trained, overwrite from sincos
-        self.pos_embed.data = torch.from_numpy(pos_embed).float().unsqueeze(0) 
+        # patch_hw = (img_size[0] // patch_size, img_size[1] // patch_size)
+        # pos_embed = get_2d_sincos_pos_embed_flexible(self.pos_embed.size(-1), patch_hw, cls_token=False) # not trained, overwrite from sincos
+        # self.pos_embed.data = torch.from_numpy(pos_embed).float().unsqueeze(0) 
         
     def add_classification_head(self, drop_path):
         # Add classification head to the model itself

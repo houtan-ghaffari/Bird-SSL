@@ -62,8 +62,9 @@ module:
       
     extras:
       #layer_decay: 0.75
-      layer_decay: null
+      layer_decay: 0.75
       #decay_type: inverse_normal
       decay_type: inverse_normal
+  network:
+    ema_update_rate: null
       
-

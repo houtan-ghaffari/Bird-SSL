@@ -41,5 +41,6 @@ mask2d: ${data.transform.mask2d}
 mask_t_prob: ${data.transform.mask_t_prob}
 mask_f_prob: ${data.transform.mask_f_prob}
 freeze_backbone: false
+ema_update_rate: null
 
 #2025-01-03_193352

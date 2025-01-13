@@ -58,6 +58,7 @@ def build_model(cfg_module: DictConfig):
             mask2d=cfg_module.network.mask2d,
             mask_t_prob=cfg_module.network.mask_t_prob,
             mask_f_prob=cfg_module.network.mask_f_prob,
+            ema_update_rate=cfg_module.network.ema_update_rate,
         )
     elif cfg_module.network.name == "ConvNext":
         module = ConvNext(

@@ -504,7 +504,8 @@ class VIT(L.LightningModule,VisionTransformer):
                  metric_cfg,
                  mask_t_prob,
                  mask_f_prob,
-                 mask2d
+                 mask2d,
+                 ema_update_rate
     ):
         
         L.LightningModule.__init__(self)
@@ -537,6 +538,7 @@ class VIT(L.LightningModule,VisionTransformer):
         self.mlp_ratio = mlp_ratio
         self.num_classes = num_classes 
         self.qkv_bias = qkv_bias 
+        self.ema_update_rate = ema_update_rate
 
         self.loss = hydra.utils.instantiate(loss)
         self.optimizer = None
@@ -571,6 +573,10 @@ class VIT(L.LightningModule,VisionTransformer):
         self.val_targets = []
         self.test_predictions = []
         self.test_targets = []
+        
+        self.ema = None
+        if self.ema_update_rate: 
+            self.ema = EMA(self, decay=ema_update_rate)
 
     def forward_features(self, x):
         B = x.shape[0]
@@ -674,11 +680,19 @@ class VIT(L.LightningModule,VisionTransformer):
         except:
             loss = self.loss(pred, targets.float())
         self.log('train_loss', loss, on_step=True, on_epoch=True, prog_bar=True)
+
+        if self.ema: 
+            self.ema.update()
+
         return loss
 
     def validation_step(self, batch, batch_idx):
         audio = batch["audio"]
         targets = batch["label"]
+
+        if self.ema: 
+            self.ema.apply_shadow()
+
         pred = self(audio)
         targets = targets.long()
         try:
@@ -693,6 +707,9 @@ class VIT(L.LightningModule,VisionTransformer):
 
         #self.log(f'val_{self.val_metric.__class__.__name__}', metric, on_step=False, on_epoch=True, prog_bar=True)
         self.log('val_loss', loss, on_step=False, on_epoch=True, prog_bar=True)
+
+        if self.ema:
+            self.ema.restore()
     
     def on_validation_epoch_end(self):
         preds = torch.cat(self.val_predictions)
@@ -712,6 +729,9 @@ class VIT(L.LightningModule,VisionTransformer):
         audio = batch["audio"]
         targets = batch["label"]
 
+        if self.ema: 
+            self.ema.apply_shadow()
+
         self.mask_t_prob = 0.0
         self.mask_f_prob = 0.0 #fix later!
 
@@ -726,6 +746,9 @@ class VIT(L.LightningModule,VisionTransformer):
         self.test_targets.append(targets.detach().cpu())
 
         self.log('test_loss', loss, on_step=False, on_epoch=True, prog_bar=True)
+
+        if self.ema: 
+            self.ema.restore()
     
     def on_test_epoch_end(self):
         preds = torch.cat(self.test_predictions)
@@ -803,7 +826,8 @@ class VIT(L.LightningModule,VisionTransformer):
             else:
                 num_patches = 512 # audioset
 
-            self.patch_embed = PatchEmbed(img_size, 16, 1, self.embed_dim)
+            #self.patch_embed = PatchEmbed(img_size, 16, 1, self.embed_dim)
+            self.patch_embed = PatchEmbed_org((img_size[1], img_size[0]), 16, 1, self.embed_dim)
             self.pos_embed = nn.Parameter(torch.zeros(1, num_patches + 1, self.embed_dim), requires_grad=False) #to load pretrained pos embed
             try:
                 pre_state_dict = torch.load(pretrained_weights_path, map_location="cpu")["model"]
@@ -882,6 +906,70 @@ class VIT(L.LightningModule,VisionTransformer):
             self.load_state_dict(pretrained_state_dict, strict=False)
 
             trunc_normal_(self.head.weight, std=2e-5)
+
+import copy
+import torch
+
+class EMA:
+    def __init__(self, model, decay=0.9998):
+        self.model = model
+        self.decay = decay
+        self.shadow_params = {}
+        self.shadow_buffers = {}
+
+        with torch.no_grad():
+            for name, param in model.named_parameters():
+                if param.requires_grad:
+                    self.shadow_params[name] = param.detach().clone()
+                    self.shadow_params[name].requires_grad = False
+            for name, buffer in model.named_buffers():
+                self.shadow_buffers[name] = buffer.detach().clone()
+
+        # We'll store the base model’s original weights here (for restore)
+        self.backup_params = {}
+        self.backup_buffers = {}
+
+    @torch.no_grad()
+    def update(self):
+        for name, param in self.model.named_parameters():
+            if param.requires_grad:
+                self.shadow_params[name] = self.shadow_params[name].to(param.device)
+                self.shadow_params[name].copy_(
+                    self.decay * self.shadow_params[name] + (1.0 - self.decay) * param.data
+                )
+        for name, buffer in self.model.named_buffers():
+            self.shadow_buffers[name] = buffer.detach().clone().to(buffer.device)
+
+    @torch.no_grad()
+    def apply_shadow(self):
+        """
+        1) Backup the base model's current params/buffers
+        2) Load the shadow (EMA) weights into the model
+        """
+        for name, param in self.model.named_parameters():
+            if param.requires_grad:
+                # backup base weights
+                self.backup_params[name] = param.detach().clone()
+                # load shadow
+                param.copy_(self.shadow_params[name].to(param.device))
+
+        for name, buffer in self.model.named_buffers():
+            # backup base buffers
+            self.backup_buffers[name] = buffer.detach().clone()
+            # load shadow
+            buffer.copy_(self.shadow_buffers[name].to(buffer.device))
+
+    @torch.no_grad()
+    def restore(self):
+        """
+        Restore the base model weights from `backup_...`
+        """
+        for name, param in self.model.named_parameters():
+            if param.requires_grad and name in self.backup_params:
+                param.copy_(self.backup_params[name].to(param.device))
+        for name, buffer in self.model.named_buffers():
+            if name in self.backup_buffers:
+                buffer.copy_(self.backup_buffers[name].to(buffer.device))
 
 class CosineWarmupScheduler(_LRScheduler):
     def __init__(self, optimizer, warmup_steps, total_steps, last_epoch=-1, min_lr=1e-6):
