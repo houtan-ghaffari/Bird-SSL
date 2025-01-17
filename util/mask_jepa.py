@@ -147,6 +147,7 @@ class MaskCollator(object):
             masks_p, masks_C = [], []
             for _ in range(self.npred):
                 mask, mask_C = self._sample_block_mask(p_size) #mask = 56 preds, rest is keep 
+
                 masks_p.append(mask)
                 masks_C.append(mask_C)
                 min_keep_pred = min(min_keep_pred, len(mask))

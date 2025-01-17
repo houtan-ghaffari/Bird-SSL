@@ -10,7 +10,7 @@ defaults:
   #- override /module/network: convnext.yaml
   - override /module/optimizer: adamw
   - override /module/scheduler: cosine
-  - override /module/loss: binary_cross_entropy
+  - override /module/loss: asymmetric_loss.yaml
   - override /module/metric: birdset_collection
   - override /paths: workstation
   - override /trainer: single_gpu
@@ -23,7 +23,7 @@ train: true
 test: true
 
 logger:
-  experiment_name: overnight_hsn
+  experiment_name: overnight_hsn_ppnet
 
 data:
   loaders:
@@ -49,13 +49,6 @@ module:
   optimizer:
     target:
       #lr: 5e-5
-      #lr: 3e-4
-      #lr: 1e-3
-      #lr: 3e-4
-      #lr: 3e-3
-      #lr: 3e-4
-      #lr: 5e-5
-      #lr: 5e-4
       lr: 3e-4
       #lr: 5e-4
       #lr: 1e-4
@@ -70,4 +63,5 @@ module:
       
   network:
     ema_update_rate: null
+    name: VIT_ppnet
       

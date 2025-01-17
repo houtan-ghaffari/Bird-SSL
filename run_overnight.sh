@@ -29,23 +29,133 @@
 #   python finetune.py trainer.max_epochs=30 experiment=finetune_hsn.yaml +decoder_name=standard
 # done
 
-weight_decays=(3e-4)
-# Define the learning rates you want to try
-learning_rates=(4e-4 3e-4 2e-4 1e-4 5e-4 1e-3)
-for decay in "${weight_decays[@]}"; do
-  # Iterate over the learning rates and run the experiment
-  for lr in "${learning_rates[@]}"; do
-    echo "Running experiment with lr=${lr} and decay=${decay}"
+# weight_decays=(3e-4)
+# # Define the learning rates you want to try
+# learning_rates=(4e-4 3e-4 2e-4 1e-4 5e-4 1e-3)
+# for decay in "${weight_decays[@]}"; do
+#   # Iterate over the learning rates and run the experiment
+#   for lr in "${learning_rates[@]}"; do
+#     echo "Running experiment with lr=${lr} and decay=${decay}"
   
-    # Convert the learning rate to a float for comparison
-    lr_float=$(printf "%.10f" "$lr")
+#     # Convert the learning rate to a float for comparison
+#     lr_float=$(printf "%.10f" "$lr")
 
-    python finetune.py \
-      trainer.max_epochs=30 \
-      experiment=finetune_hsn.yaml \
-      module.optimizer.target.lr=$lr \
-      module.optimizer.target.weight_decay=$decay \
-      logger.experiment_name="overnight_hsn"
-  done
-done
+#     python finetune.py \
+#       trainer.max_epochs=30 \
+#       experiment=finetune_hsn.yaml \
+#       module.optimizer.target.lr=$lr \
+#       module.optimizer.target.weight_decay=$decay \
+#       logger.experiment_name="overnight_hsn"
+#   done
+# done
+python finetune.py \
+  experiment=finetune_hsn_ppnet.yaml \
+  logger.experiment_name="overnight_hsn_ppnet"\
+  module.network.ppnet.prototype_lr=1e-2
 
+python finetune.py \
+  experiment=finetune_hsn_ppnet.yaml \
+  logger.experiment_name="overnight_hsn_ppnet"\
+
+python finetune.py \
+  experiment=finetune_hsn_ppnet.yaml \
+  logger.experiment_name="overnight_hsn_ppnet"\
+  module.optimizer.target.lr=1e-4
+
+python finetune.py \
+  experiment=finetune_hsn_ppnet.yaml \
+  logger.experiment_name="overnight_hsn_ppnet"\
+  module.optimizer.target.lr=4e-4
+
+# python finetune.py \
+#   experiment=finetune_hsn_ppnet.yaml \
+#   logger.experiment_name="overnight_hsn_ppnet"\
+#   module.optimizer.target.lr=5e-4
+
+python finetune.py \
+  experiment=finetune_hsn_ppnet.yaml \
+  logger.experiment_name="overnight_hsn_ppnet"\
+  module.optimizer.target.lr=1e-4 \
+  module.network.ppnet.prototype_lr=1e-2
+
+python finetune.py \
+  experiment=finetune_hsn_ppnet.yaml \
+  logger.experiment_name="overnight_hsn_ppnet"\
+  module.optimizer.target.lr=4e-4 \
+  module.network.ppnet.prototype_lr=1e-2
+
+# python finetune.py \
+#   experiment=finetune_hsn_ppnet.yaml \
+#   logger.experiment_name="overnight_hsn_ppnet"\
+#   module.optimizer.target.lr=5e-4
+  
+python finetune.py \
+  experiment=finetune_hsn_ppnet.yaml \
+  logger.experiment_name="overnight_hsn_ppnet"\
+  module.network.ppnet.prototype_lr=5e-3
+
+python finetune.py \
+  experiment=finetune_hsn_ppnet.yaml \
+  logger.experiment_name="overnight_hsn_ppnet"\
+  module.optimizer.target.lr=1e-4 \
+  module.network.ppnet.prototype_lr=5e-3
+
+python finetune.py \
+  experiment=finetune_hsn_ppnet.yaml \
+  logger.experiment_name="overnight_hsn_ppnet"\
+  module.optimizer.target.lr=4e-4 \
+  module.network.ppnet.prototype_lr=5e-3
+
+
+
+python finetune.py \
+  experiment=finetune_hsn_ppnet.yaml \
+  logger.experiment_name="overnight_hsn_ppnet"\
+  module.network.ppnet.num_prototypes=210
+
+python finetune.py \
+  experiment=finetune_hsn_ppnet.yaml \
+  logger.experiment_name="overnight_hsn_ppnet"\
+  module.optimizer.target.lr=1e-4 \
+  module.network.ppnet.num_prototypes=210
+
+python finetune.py \
+  experiment=finetune_hsn_ppnet.yaml \
+  logger.experiment_name="overnight_hsn_ppnet"\
+  module.optimizer.target.lr=4e-4 \
+  module.network.ppnet.num_prototypes=210
+
+# python finetune.py \
+#   experiment=finetune_hsn_ppnet.yaml \
+#   logger.experiment_name="overnight_hsn_ppnet"\
+#   module.optimizer.target.lr=5e-5
+###
+
+
+# python finetune.py \
+#   experiment=finetune_hsn_ppnet.yaml \
+#   logger.experiment_name="overnight_hsn_ppnet"\
+#   module.optimizer.target.lr=4e-4 \
+#   module.network.pretrained_weights_path="/home/lrauch/VIT_XCL_epoch01_ft_from143556.ckpt" \
+#   module.network.freeze_backbone=fals
+
+# python finetune.py \
+#   experiment=finetune_hsn_ppnet.yaml \
+#   logger.experiment_name="overnight_hsn_ppnet"\
+#   module.optimizer.target.lr=3e-4 \
+#   module.network.pretrained_weights_path="/home/lrauch/VIT_XCL_epoch01_ft_from143556.ckpt" \
+#   module.network.freeze_backbone=true
+
+# python finetune.py \
+#   experiment=finetune_hsn_ppnet.yaml \
+#   logger.experiment_name="overnight_hsn_ppnet"\
+#   module.optimizer.target.lr=5e-4 \
+#   module.network.pretrained_weights_path="/home/lrauch/VIT_XCL_epoch01_ft_from143556.ckpt" \
+#   module.network.freeze_backbone=true
+
+# python finetune.py \
+#   experiment=finetune_hsn_ppnet.yaml \
+#   logger.experiment_name="overnight_hsn_ppnet"\
+#   module.optimizer.target.lr=5e-5 \
+#   module.network.pretrained_weights_path="/home/lrauch/VIT_XCL_epoch01_ft_from143556.ckpt" \
+#   module.network.freeze_backbone=true

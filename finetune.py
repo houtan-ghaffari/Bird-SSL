@@ -3,6 +3,7 @@ import hydra
 import torch
 import lightning as L
 import sys
+import datasets
 
 from omegaconf import OmegaConf, DictConfig
 import pyrootutils
@@ -77,6 +78,10 @@ def finetune(cfg: DictConfig):
              for name, param in model.named_parameters():
                 if 'classifier' not in name:
                     param.requires_grad = False
+        elif cfg.module.network.name == "VIT_ppnet":
+            for name, param in model.named_parameters():
+                if 'ppnet' not in name:
+                    param.requires_grad = False
         else:
             for name, param in model.named_parameters():
                 if 'head' not in name:
@@ -103,6 +108,7 @@ def finetune(cfg: DictConfig):
         log.info("Start testing")
         trainer.test(model=model, datamodule=datamodule, ckpt_path="last")
 
+        
 if __name__ == "__main__":
     finetune()
 

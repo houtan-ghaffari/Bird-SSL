@@ -19,9 +19,8 @@ pos_trainable: False
 #pretrained_weights_path_: /home/lrauch/AudioMAE_XCL_epoch=10_nomixup_l_swin.ckpt
 #pretrained_weights_path_: /home/lrauch/AudioMAE_XCL_epo20_nomixup_l_swin.ckpt
 #pretrained_weights_path_: /home/lrauch/AudioMAE_XCL_epoch=30_mixup0.7_l_swin.ckpt
-#pretrained_weights_path_: /home/lrauch/AudioMAE_XCL_epoch=99_mixup_l.ckpt
 #pretrained_weights_path_: /home/lrauch/AudioMAE_XCL_swinv2_nomix35.ckpt
-#pretrained_weights_path_: /home/lrauch/VIT_l_5epochs_XCL.ckpt
+#pretrained_weights_path: /home/lrauch/VIT_l_5epochs_XCL.ckpt
 #pretrained_weights_path_: /home/lrauch/AudioMAE_XCL_epoch=99_mixu0.5mixup_l.ckpt
 #pretrained_weights_path_: /home/lrauch/AudioMAE_XCL_2024-12-17-173525_ep25_0.3mix_large_soundscapes.ckpt
 #pretrained_weights_path_: /home/lrauch/AudioMAE_XCL_2024-12-17-132203ep25_0.3mix_large_nosoundscape.ckpt
@@ -32,7 +31,12 @@ pos_trainable: False
 #pretrained_weights_path_: /home/lrauch/mnt_check/pretrain_xcl_wave_large/runs/XCL/AudioMAE/2024-12-22_012826/callback_checkpoints/AudioMAE_XCL_epoch=54.ckpt
 #pretrained_weights_path_: /home/lrauch/mnt_check/pretrain_xcl_wave_large/runs/XCL/AudioMAE/2024-12-24_103957/callback_checkpoints/AudioMAE_XCL_epoch=54.ckpt <--- swinv2
 #pretrained_weights_path: /home/lrauch/mnt_check/pretrain_xcl_wave_large/runs/XCL/AudioMAE/2024-12-20_143556/callback_checkpoints/AudioMAE_XCL_epoch=99.ckpt #<--- bestrep
-pretrained_weights_path: /home/lrauch/AudioMAE_XCL_epoch99_2024-12-20_143556rep
+#pretrained_weights_path: /home/lrauch/AudioMAE_XCL_epoch99_2024-12-20_143556rep
+pretrained_weights_path: /home/lrauch/AudioMAE_XCL_epoch150_213828.ckpt
+#pretrained_weights_path: /home/lrauch/mnt_check/finetune_xcl/runs/XCL/VIT/2025-01-06_103326/callback_checkpoints/VIT_XCL_epoch=01.ckpt
+#pretrained_weights_path: /home/lrauch/VIT_XCL_epoch01_ft_from143556.ckpt
+#pretrained_weights_path: null
+#pretrained_weights_path: /home/lrauch/AudioMAE_XCL_epoch=99_mixup_l.ckpt
 
 #pretrained_weights_path: /home/lrauch/AudioMAE_XCL_epoch99_large_03mix_permute.ckpt
 target_length: ${data.dataset.target_length}
@@ -42,5 +46,24 @@ mask_t_prob: ${data.transform.mask_t_prob}
 mask_f_prob: ${data.transform.mask_f_prob}
 freeze_backbone: false
 ema_update_rate: null
+mask_inference: null
 
+ppnet: 
+  num_prototypes: 420
+  channels_prototypes: 1024
+  h_prototypes: 1
+  w_prototypes: 1
+  num_classes: ${data.dataset.num_classes}
+  topk_k: 1
+  margin: null
+  init_weights: true
+  add_on_layers_type: upsample
+  incorrect_class_connection: null
+  correct_class_connection: 1.0
+  bias_last_layer: -2.0
+  non_negative_last_layer: true
+  embedded_spectrogram_height: null
+  last_layer_lr: 4e-4
+  prototype_lr: 0.04
+  focal_similarity: true
 #2025-01-03_193352

@@ -1,7 +1,7 @@
 # @package _global_
 defaults:
   - override /callbacks: default
-  - override /data/dataset: HSN
+  - override /data/dataset: POW
   - override /data/loaders: esc50
   - override /data/transform: melbank_birdset
   - override /logger: mlflow
@@ -10,20 +10,20 @@ defaults:
   #- override /module/network: convnext.yaml
   - override /module/optimizer: adamw
   - override /module/scheduler: cosine
-  - override /module/loss: binary_cross_entropy
+  - override /module/loss: asymmetric_loss.yaml
   - override /module/metric: birdset_collection
   - override /paths: workstation
   - override /trainer: single_gpu
 
 seed: 42
 start_time: ${now:%Y-%m-%d_%H%M%S}
-task_name: "finetune_hsn"
+task_name: "finetune_pow"
 
 train: true
 test: true
 
 logger:
-  experiment_name: overnight_hsn
+  experiment_name: overnight_pow
 
 data:
   loaders:
@@ -49,14 +49,7 @@ module:
   optimizer:
     target:
       #lr: 5e-5
-      #lr: 3e-4
-      #lr: 1e-3
-      #lr: 3e-4
-      #lr: 3e-3
-      #lr: 3e-4
-      #lr: 5e-5
-      #lr: 5e-4
-      lr: 3e-4
+      lr: 4e-4
       #lr: 5e-4
       #lr: 1e-4
       #weight_decay: 3e-2
@@ -70,4 +63,8 @@ module:
       
   network:
     ema_update_rate: null
+    name: VIT_ppnet
+    ppnet:
+      num_prototypes: 960
+
       

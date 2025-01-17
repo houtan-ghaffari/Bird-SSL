@@ -2,6 +2,7 @@ import lightning as L
 import torch
 import torch.nn as nn
 import hydra
+import datasets
 from torchmetrics import MetricCollection
 from timm.models.vision_transformer import PatchEmbed
 from timm.models.vision_transformer import Block
@@ -21,6 +22,7 @@ from transformers import get_cosine_schedule_with_warmup
 import math
 from torch.optim.lr_scheduler import _LRScheduler
 from util.lr_decay import param_groups_lrd
+from models_ppnet import LinearLayerWithoutNegativeConnections
 
 
 class MAE_Encoder(nn.Module):
@@ -505,11 +507,15 @@ class VIT(L.LightningModule,VisionTransformer):
                  mask_t_prob,
                  mask_f_prob,
                  mask2d,
-                 ema_update_rate
+                 ema_update_rate,
+                 mask_inference
     ):
         
         L.LightningModule.__init__(self)
         
+        if mask_inference:
+            num_classes = 9735 # XCL overwrite 
+
         VisionTransformer.__init__(
             self,
             img_size = (img_size_x, img_size_y), ###test!!
@@ -577,6 +583,17 @@ class VIT(L.LightningModule,VisionTransformer):
         self.ema = None
         if self.ema_update_rate: 
             self.ema = EMA(self, decay=ema_update_rate)
+
+        self.class_mask = None
+        if mask_inference:
+            print("Logit Masking")
+            hf_path = "DBD-research-group/BirdSet"
+            hf_name = "XCL"
+            pretrain_labels = datasets.load_dataset_builder(
+                hf_path, hf_name, trust_remote_code=True).info.features["ebird_code"]
+            inference_labels = datasets.load_dataset_builder(
+                hf_path, mask_inference, trust_remote_code=True).info.features["ebird_code"]
+            self.class_mask = [pretrain_labels.names.index(i) for i in inference_labels.names]
 
     def forward_features(self, x):
         B = x.shape[0]
@@ -736,6 +753,11 @@ class VIT(L.LightningModule,VisionTransformer):
         self.mask_f_prob = 0.0 #fix later!
 
         pred = self(audio)
+        if self.class_mask: 
+            # if targets.shape == pred.shape:
+            #     targets = targets[:, self.class_mask]
+            pred = pred[:, self.class_mask]
+
         targets = targets.long()
         try:
             loss  = self.loss(pred, targets)
@@ -850,11 +872,11 @@ class VIT(L.LightningModule,VisionTransformer):
                 # Add the modified key-value pair to the new state dict
                 pretrained_state_dict[new_key] = value
 
-
-            for k in ['head.weight', 'head.bias']:
-                if k in pretrained_state_dict: #and pretrained_state_dict[k].shape != self.state_dict[k].shape:
-                    print(f"Removing key {k} from pretrained checkpoint")
-                    del pretrained_state_dict[k]
+            if not self.class_mask:
+                for k in ['head.weight', 'head.bias']:
+                    if k in pretrained_state_dict: #and pretrained_state_dict[k].shape != self.state_dict[k].shape:
+                        print(f"Removing key {k} from pretrained checkpoint")
+                        del pretrained_state_dict[k]
             
             info = self.load_state_dict(pretrained_state_dict, strict=False)
 
@@ -1000,7 +1022,6 @@ class CosineWarmupScheduler(_LRScheduler):
             lrs.append(lr)
         return lrs
         
-
 from transformers import AutoConfig, ConvNextForImageClassification
 
 class ConvNext(L.LightningModule):
@@ -1199,4 +1220,462 @@ class ConvNext(L.LightningModule):
         
         return {"optimizer": self.optimizer}      
     
+from models_ppnet import PPNet
 
+class VIT_ppnet(L.LightningModule,VisionTransformer):
+
+    def __init__(self, 
+                 img_size_x,
+                 img_size_y,
+                 patch_size,
+                 in_chans,
+                 embed_dim,
+                 global_pool,
+                 norm_layer,
+                 mlp_ratio,
+                 qkv_bias,
+                 eps,
+                 drop_path,
+                 num_heads,
+                 depth,
+                 num_classes,
+                 optimizer,
+                 scheduler,
+                 pretrained_weights_path, 
+                 target_length,
+                 loss,
+                 metric_cfg,
+                 mask_t_prob,
+                 mask_f_prob,
+                 mask2d,
+                 ema_update_rate,
+                 ppnet_cfg
+    ):
+        
+        L.LightningModule.__init__(self)
+        
+        VisionTransformer.__init__(
+            self,
+            img_size = (img_size_x, img_size_y), ###test!!
+            patch_size = patch_size,
+            in_chans = in_chans,
+            embed_dim = embed_dim,
+            depth = depth,
+            num_heads = num_heads,
+            mlp_ratio = mlp_ratio,
+            qkv_bias = qkv_bias,
+            norm_layer = partial(nn.LayerNorm, eps=eps),
+            num_classes = num_classes,
+            drop_path_rate=drop_path,
+        )
+        self.save_hyperparameters()
+
+        self.ppnet_cfg = ppnet_cfg
+        self.ppnet = PPNet(
+            num_prototypes=ppnet_cfg.num_prototypes,
+            channels_prototypes=ppnet_cfg.channels_prototypes,
+            h_prototypes=ppnet_cfg.h_prototypes,
+            w_prototypes=ppnet_cfg.w_prototypes,
+            num_classes=ppnet_cfg.num_classes,
+            topk_k=ppnet_cfg.topk_k,
+            margin=ppnet_cfg.margin,
+            init_weights=ppnet_cfg.init_weights,
+            add_on_layers_type=ppnet_cfg.add_on_layers_type,
+            incorrect_class_connection=ppnet_cfg.incorrect_class_connection,
+            correct_class_connection=ppnet_cfg.correct_class_connection,
+            bias_last_layer=ppnet_cfg.bias_last_layer,
+            non_negative_last_layer=ppnet_cfg.non_negative_last_layer,
+            embedded_spectrogram_height=ppnet_cfg.embedded_spectrogram_height,
+        )
+
+    #   for p in model.backbone_model.parameters():
+    #     p.requires_grad = False
+    # for p in model.add_on_layers.parameters():
+    #     p.requires_grad = True
+    # model.prototype_vectors.requires_grad = True      
+        self.img_size = (img_size_x, img_size_y)
+        self.global_pool = global_pool
+
+        norm_layer = partial(nn.LayerNorm, eps=eps)
+        self.fc_norm = norm_layer(embed_dim)
+        self.mask_2d = mask2d
+
+        self.embed_dim = embed_dim 
+        self.num_heads = num_heads
+        self.depth = depth
+        self.mlp_ratio = mlp_ratio
+        self.num_classes = num_classes 
+        self.qkv_bias = qkv_bias 
+        self.ema_update_rate = ema_update_rate
+
+        self.loss = hydra.utils.instantiate(loss)
+        self.optimizer = None
+        self.optimizer_cfg = optimizer.target
+        self.train_batch_size = optimizer.extras.train_batch_size
+        self.layer_decay = optimizer.extras.layer_decay
+        self.decay_type = optimizer.extras.decay_type
+        self.scheduler_cfg = scheduler
+
+        self.mask_2d = mask2d
+        self.mask_t_prob = mask_t_prob
+        self.mask_f_prob = mask_f_prob
+
+        self.pretrained_weights_path = pretrained_weights_path
+        self.target_length = target_length
+
+        metric = hydra.utils.instantiate(metric_cfg)
+        
+        additional_metrics = []
+        if metric_cfg.get("additional"):
+            for _, metric_cfg in metric_cfg.additional.items():
+                additional_metrics.append(hydra.utils.instantiate(metric_cfg))
+        add_metrics = MetricCollection(additional_metrics)
+        self.test_add_metrics = add_metrics.clone()
+        self.val_add_metrics = add_metrics.clone()
+
+        self.train_metric = metric.clone()
+        self.val_metric = metric.clone()
+        self.test_metric = metric.clone()
+
+        self.val_predictions = []
+        self.val_targets = []
+        self.test_predictions = []
+        self.test_targets = []
+        
+        self.ema = None
+        if self.ema_update_rate: 
+            self.ema = EMA(self, decay=ema_update_rate)
+        
+        del self.head
+        #del self.norm
+        del self.fc_norm
+        del self.head_drop
+        
+
+    def forward_features(self, x):
+        B = x.shape[0]
+        #x = x.permute(0,1,3,2) # test!!
+        x = self.patch_embed(x) # batch, patch, embed
+        x = x + self.pos_embed[:, 1:, :] # strange
+        cls_token = self.cls_token + self.pos_embed[:, :1, :]
+        cls_tokens = cls_token.expand(B, -1, -1)  # stole cls_tokens impl from Phil Wang, thanks
+        x = torch.cat((cls_tokens, x), dim=1)
+        x = self.pos_drop(x)        
+
+        for blk in self.blocks:
+            x = blk(x)
+            #x = torch.nan_to_num(x, nan=0.0) #????
+        x = self.norm(x)
+
+        if self.ppnet_cfg.focal_similarity == True:
+            x_cls = x[:, 0, :]
+            x_patch = x[:, 1:, :] 
+            z_f = x_patch - x_cls.unsqueeze(1) 
+            x = z_f.permute(0, 2, 1).reshape(B, self.embed_dim, 8, 32)
+        else:
+            x = x[:,1:,:].permute(0,2,1).reshape(B, self.embed_dim, 8, 32)
+
+        logits,_ = self.ppnet(x)
+
+        return logits
+    
+
+    def forward(self, x):
+        logits = self.forward_features(x)
+        return logits 
+
+
+    def training_step(self, batch, batch_idx):
+        audio = batch["audio"]
+        targets = batch["label"]
+        logits = self(audio)
+        targets = targets.long()
+        preds = logits.sigmoid()
+        bce_loss = self.loss(logits, targets.float())
+        orthogonality_loss = self.calculate_orthogonality_loss()
+
+        self.log('bce_loss', bce_loss, on_step=True, on_epoch=True, prog_bar=True)
+        self.log('orthogonality_loss', orthogonality_loss, on_step=True, on_epoch=True, prog_bar=True)
+
+        loss = bce_loss + orthogonality_loss
+
+        #self.log('train_loss', loss, on_step=True, on_epoch=True, prog_bar=True)
+
+        if self.ema: 
+            self.ema.update()
+
+        return loss
+
+    def validation_step(self, batch, batch_idx):
+        audio = batch["audio"]
+        targets = batch["label"]
+
+        if self.ema: 
+            self.ema.apply_shadow()
+
+        pred = self(audio)
+        targets = targets.long()
+        try:
+            loss  = self.loss(pred, targets)
+        except:
+            loss = self.loss(pred, targets.float())
+
+        #metric = self.val_metric(pred, targets)
+        #pred = torch.softmax(pred, dim=1)
+        self.val_predictions.append(pred.detach().cpu())
+        self.val_targets.append(targets.detach().cpu())
+
+        #self.log(f'val_{self.val_metric.__class__.__name__}', metric, on_step=False, on_epoch=True, prog_bar=True)
+        self.log('val_loss', loss, on_step=False, on_epoch=True, prog_bar=True)
+
+        if self.ema:
+            self.ema.restore()
+    
+    def on_validation_epoch_end(self):
+        preds = torch.cat(self.val_predictions)
+        targets = torch.cat(self.val_targets)
+        metric = self.val_metric(preds, targets)
+        self.log(f'val_{self.val_metric.__class__.__name__}', metric, on_step=False, on_epoch=True, prog_bar=True)
+        print("val metric:", metric.detach().cpu().item())
+
+        self.val_add_metrics(preds, targets)
+        for name, metric in self.val_add_metrics.items():
+            self.log(f'valid_{name}', metric, on_epoch=True, prog_bar=True)
+
+        self.val_predictions = []
+        self.val_targets = []
+    
+    def test_step(self, batch, batch_idx):
+        audio = batch["audio"]
+        targets = batch["label"]
+
+        if self.ema: 
+            self.ema.apply_shadow()
+
+        self.mask_t_prob = 0.0
+        self.mask_f_prob = 0.0 #fix later!
+
+        pred = self(audio)
+        targets = targets.long()
+        try:
+            loss  = self.loss(pred, targets)
+        except:
+            loss = self.loss(pred, targets.float())
+        
+        self.test_predictions.append(pred.detach().cpu())
+        self.test_targets.append(targets.detach().cpu())
+
+        self.log('test_loss', loss, on_step=False, on_epoch=True, prog_bar=True)
+
+        if self.ema: 
+            self.ema.restore()
+    
+    def on_test_epoch_end(self):
+        preds = torch.cat(self.test_predictions)
+        targets = torch.cat(self.test_targets)
+        self.test_metric(preds, targets)
+        self.log(f'test_{self.test_metric.__class__.__name__}', self.test_metric, on_epoch=True, prog_bar=True)
+
+        self.test_add_metrics(preds, targets)
+        for name, metric in self.test_add_metrics.items():
+            self.log(f'test_{name}', metric, on_epoch=True, prog_bar=True)
+
+    def configure_optimizers(self):
+        
+        from util.lr_decay import param_groups_lrd_pp
+        #heuristic:
+        # eff_batch_size = self.trainer.accumulate_grad_batches * self.trainer.num_devices * self.train_batch_size
+        # self.optimizer_cfg["lr"] = self.optimizer_cfg["lr"] * eff_batch_size / 48
+        # print("effective learning rate:", self.optimizer_cfg["lr"], self.layer_decay)
+
+        if self.layer_decay:
+            params = param_groups_lrd_pp(
+                model=self,
+                weight_decay=self.optimizer_cfg["weight_decay"],
+                no_weight_decay_list=self.no_weight_decay(),
+                layer_decay=self.layer_decay, #scaling favtor for ech layer 0.75^layer ..--> 0.75^0
+                decay_type=self.decay_type,
+                last_layer_lr=self.ppnet_cfg.last_layer_lr,
+                prototype_lr=self.ppnet_cfg.prototype_lr,
+            )
+
+            self.optimizer = hydra.utils.instantiate(
+                self.optimizer_cfg, 
+                params
+            )
+
+        else:
+            optimizer_specifications = []
+
+            # 1) Add the add_on_layers group
+            addon_params = list(self.ppnet.add_on_layers.parameters())
+            optimizer_specifications.append({
+                "params": addon_params,
+                "lr": 3e-2,
+                "weight_decay": 1e-4,
+            })
+
+            # 2) Add the prototype_vectors group
+            #    (assuming this is either a list of Tensors or just one Tensor)
+            proto_params = [self.ppnet.prototype_vectors]  # or list(...)
+            optimizer_specifications.append({
+                "params": proto_params,
+                "lr": 0.05,
+            })
+
+            # 3) Add the last_layer group
+            last_params = list(self.ppnet.last_layer.parameters())
+            optimizer_specifications.append({
+                "params": last_params,
+                "lr": 5e-4,
+                "weight_decay": 1e-4,
+            })
+
+            # 4) If there are truly "rest" parameters:
+            all_params = set(self.parameters())
+            already_in_groups = set(addon_params + proto_params + last_params)
+            rest = [p for p in all_params if p not in already_in_groups]
+            if len(rest) > 0:
+                optimizer_specifications.append({"params": rest})
+
+            # 5) Instantiate via Hydra
+            self.optimizer = hydra.utils.instantiate(
+                self.optimizer_cfg, 
+                optimizer_specifications
+            )
+    
+        if self.scheduler_cfg: 
+            num_training_steps = self.trainer.estimated_stepping_batches
+            warmup_ratio = 0.067 # hard coded
+            num_warmup_steps = num_training_steps * warmup_ratio
+
+            # scheduler = get_cosine_schedule_with_warmup(
+            #     optimizer=self.optimizer,
+            #     num_warmup_steps=num_warmup_steps,
+            #     num_training_steps=num_training_steps
+            # )
+
+            scheduler = CosineWarmupScheduler(
+                optimizer=self.optimizer,
+                warmup_steps=num_warmup_steps,
+                total_steps=num_training_steps
+            )
+
+            scheduler_dict = {
+                "scheduler": scheduler,
+                "interval": "step",  # Update at every step
+                "frequency": 1,
+                "name": "lr_cosine"
+            }
+
+            return {"optimizer": self.optimizer, "lr_scheduler": scheduler_dict}
+        
+        return {"optimizer": self.optimizer}      
+    
+    def load_pretrained_weights(self, pretrained_weights_path, dataset_name): 
+        img_size = (self.target_length, 128)
+        #img_size = (128, self.target_length) # should be correcter, but not pretrained this way
+
+        if self.target_length == 512: #esc50, hsn, 5 seconds
+            #num_patches = 512 # audioset
+            if "xc" in self.pretrained_weights_path or "XCL" in self.pretrained_weights_path:
+                num_patches = 256 # birdset
+            else:
+                num_patches = 512 # audioset
+
+            self.patch_embed = PatchEmbed(img_size, 16, 1, self.embed_dim)
+            #self.patch_embed = PatchEmbed_org(img_size, 16, 1, self.embed_dim)
+            self.pos_embed = nn.Parameter(torch.zeros(1, num_patches + 1, self.embed_dim), requires_grad=False) #to load pretrained pos embed
+            try:
+                pre_state_dict = torch.load(pretrained_weights_path, map_location="cpu")["model"]
+            except:
+                pre_state_dict = torch.load(pretrained_weights_path, map_location="cpu")["state_dict"]
+
+            pretrained_state_dict = {}
+
+            for key, value in pre_state_dict.items():
+                if key.startswith("decoder."):
+                    # Skip any key that starts with "decoder."
+                    continue
+                elif key.startswith("encoder."):
+                    # Remove the "encoder." prefix
+                    new_key = key[len("encoder."):]
+                else:
+                    # Use the original key if no prefix
+                    new_key = key
+                
+                # Add the modified key-value pair to the new state dict
+                pretrained_state_dict[new_key] = value
+
+
+            for k in ['head.weight', 'head.bias']:
+                if k in pretrained_state_dict: #and pretrained_state_dict[k].shape != self.state_dict[k].shape:
+                    print(f"Removing key {k} from pretrained checkpoint")
+                    del pretrained_state_dict[k]
+            
+            info = self.load_state_dict(pretrained_state_dict, strict=False)
+
+            patch_hw = (img_size[1] // 16, img_size[0] // 16) # 16=patchsize
+            #patch_hw = (img_size[0] // 16, img_size[1] // 16) 
+            pos_embed = get_2d_sincos_pos_embed_flexible(self.pos_embed.size(-1), patch_hw, cls_token=True) # not trained, overwrite from sincos
+            self.pos_embed.data = torch.from_numpy(pos_embed).float().unsqueeze(0) 
+
+        elif self.target_length == 1024: #audioset, 10 seconds
+
+            self.patch_embed = PatchEmbed_new(img_size=img_size, patch_size=(16,16), in_chans=1, embed_dim=self.embed_dim, stride=16) # no overlap. stride=img_size=16
+           
+            if "xc" in self.pretrained_weights_path:
+                num_patches = 256 # birdset # does not work right now 
+            else:
+                num_patches =  num_patches = self.patch_embed.num_patches # audioset
+            #num_patches = 512 # assume audioset, 1024//16=64, 128//16=8, 512=64x8
+            self.pos_embed = nn.Parameter(torch.zeros(1, num_patches + 1, self.embed_dim), requires_grad=False)  # fixed sin-cos embedding
+
+            checkpoint = torch.load(pretrained_weights_path, map_location="cpu")
+            try:
+                pre_state_dict = checkpoint["model"]
+            except:
+                pre_state_dict = checkpoint["state_dict"]
+
+            pretrained_state_dict = {}
+
+            for key, value in pre_state_dict.items():
+                if key.startswith("decoder."):
+                    # Skip any key that starts with "decoder."
+                    continue
+                elif key.startswith("encoder."):
+                    # Remove the "encoder." prefix
+                    new_key = key[len("encoder."):]
+                else:
+                    # Use the original key if no prefix
+                    new_key = key
+                
+                # Add the modified key-value pair to the new state dict
+                pretrained_state_dict[new_key] = value
+
+            state_dict = self.state_dict()
+
+            for k in ["head.weight", "head.bias"]:
+                if k in pretrained_state_dict and pretrained_state_dict[k].shape != state_dict[k].shape:
+                    print(f"Removing key {k} from pretrained checkpoint")
+                    del pretrained_state_dict[k]
+
+            self.load_state_dict(pretrained_state_dict, strict=False)
+
+            trunc_normal_(self.head.weight, std=2e-5)
+
+
+    def calculate_orthogonality_loss(self) -> torch.Tensor:
+        """
+        Calculate the normalized orthogonality loss.
+
+        Returns:
+            torch.Tensor: The normalized orthogonality loss.
+        """
+        orthogonalities = self.ppnet.get_prototype_orthogonalities()
+        orthogonality_loss = torch.norm(orthogonalities)
+
+        # Normalize the orthogonality loss by the number of elements
+        normalized_orthogonality_loss = orthogonality_loss / orthogonalities.numel()
+
+        return normalized_orthogonality_loss
