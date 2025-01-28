@@ -11,6 +11,7 @@ defaults:
   - override /module/optimizer: adamw
   - override /module/scheduler: cosine
   - override /module/loss: asymmetric_loss.yaml
+  #- override /module/loss: binary_cross_entropy.yaml
   - override /module/metric: birdset_collection
   - override /paths: workstation
   - override /trainer: single_gpu

@@ -1,6 +1,7 @@
 import lightning as L
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 import hydra
 import datasets
 from torchmetrics import MetricCollection
@@ -1593,6 +1594,7 @@ class VIT_ppnet(L.LightningModule,VisionTransformer):
 
             pretrained_state_dict = {}
 
+           # if "encoder_ema.cls_token" not in pre_state_dict: # without mim refiner
             for key, value in pre_state_dict.items():
                 if key.startswith("decoder."):
                     # Skip any key that starts with "decoder."
@@ -1607,6 +1609,27 @@ class VIT_ppnet(L.LightningModule,VisionTransformer):
                 # Add the modified key-value pair to the new state dict
                 pretrained_state_dict[new_key] = value
 
+           # else: # with mim refiner
+                # for key, value in pre_state_dict.items():
+                #     if key.startswith("decoder."):
+                #         # Skip any key that starts with "decoder."
+                #         continue
+                #     elif key.startswith("encoder."):
+                #         # Remove the "encoder." prefix
+                #         continue
+                #     elif key.startswith("projectors."):
+                #         continue
+                #     elif key.startswith("predictors."):
+                #         continue
+                #     elif key.startswith("encoder_ema."):
+                #         # Remove the "encoder_ema." prefix
+                #         new_key = key[len("encoder_ema."):]
+                #     else:
+                #         # Use the original key if no prefix
+                #         new_key = key
+                    
+                #     # Add the modified key-value pair to the new state dict
+                #     pretrained_state_dict[new_key] = value
 
             for k in ['head.weight', 'head.bias']:
                 if k in pretrained_state_dict: #and pretrained_state_dict[k].shape != self.state_dict[k].shape:
@@ -1679,3 +1702,362 @@ class VIT_ppnet(L.LightningModule,VisionTransformer):
         normalized_orthogonality_loss = orthogonality_loss / orthogonalities.numel()
 
         return normalized_orthogonality_loss
+
+
+
+class VIT_MIM(L.LightningModule):
+
+    def __init__(self, 
+                 img_size_x,
+                 img_size_y,
+                 patch_size,
+                 in_chans,
+                 embed_dim,
+                 global_pool,
+                 norm_layer,
+                 mlp_ratio,
+                 qkv_bias,
+                 eps,
+                 drop_path,
+                 num_heads,
+                 depth,
+                 pretrained_weights_path, 
+                 target_length,
+                 mim_cfg,
+                 optimizer_cfg
+    ):
+        L.LightningModule.__init__(self)
+
+        self.encoder = VisionTransformer(
+            img_size = (img_size_x, img_size_y),
+            patch_size = patch_size,
+            in_chans = in_chans,
+            embed_dim = embed_dim,
+            depth = depth,
+            num_heads = num_heads,
+            mlp_ratio = mlp_ratio,
+            qkv_bias = qkv_bias,
+            norm_layer = partial(nn.LayerNorm, eps=eps),
+            num_classes = 1,
+            drop_path_rate=drop_path,
+        )
+        
+        #self.encoder.load_pretrained_weights(pretrained_weights_path, "XCL")
+
+        self.encoder_ema = copy.deepcopy(self.encoder)
+        for p in self.encoder_ema.parameters():
+            p.requires_grad = False
+
+        #del self.encoder.head
+        del self.encoder.norm
+        del self.encoder.fc_norm
+        del self.encoder.head_drop
+
+        del self.encoder_ema.norm
+        del self.encoder_ema.fc_norm
+        del self.encoder_ema.head_drop
+
+        
+        proj_dim = mim_cfg.proj_dim
+        out_dim = mim_cfg.out_dim
+        pred_dim = mim_cfg.pred_dim
+        self.queue_size = mim_cfg.queue_size
+        self.momentum = mim_cfg.momentum
+        self.temperature = mim_cfg.temperature
+
+        # number of last layers to modify based on total depth
+        if depth == 24: # Large
+            modify_last_n = 8 # MIM-Refiner
+        elif depth == 32: # Huge
+            modify_last_n = 12 # MIM-Refiner
+        elif depth == 12: # Base
+            modify_last_n = 4 # hmm let's experiment with 4 or 6 ?
+        else:
+            modify_last_n = int(0.35*depth) # default, maybe last 35% of layers?
+
+        self.modify_last_n = modify_last_n
+        self.start_modify = depth - self.modify_last_n
+
+        # Create MLP projectors for the last N layers
+        self.projectors = nn.ModuleList([
+            nn.Sequential(
+                nn.Linear(embed_dim, proj_dim, bias=False), # don't use bias as it is followed by BN
+                nn.BatchNorm1d(proj_dim),
+                nn.ReLU(inplace=True),
+                nn.Linear(proj_dim, proj_dim, bias=False),
+                nn.BatchNorm1d(proj_dim),
+                nn.ReLU(inplace=True),
+                nn.Linear(proj_dim, out_dim, bias=False),
+                nn.BatchNorm1d(out_dim, affine=False),
+            ) for _ in range(self.modify_last_n)
+        ])
+
+        self.predictors = nn.ModuleList([
+            Predictor(hidden_dim=pred_dim, out_dim=out_dim) for _ in range(self.modify_last_n)
+        ]) 
+
+        # load pretrained weights here 
+        # second step: 20 epochs with different learning rate, 30 for mim update. 
+
+        self.save_hyperparameters()
+        self.img_size = (img_size_x, img_size_y)
+        self.global_pool = global_pool
+
+        norm_layer = partial(nn.LayerNorm, eps=eps)
+        self.fc_norm = norm_layer(embed_dim)
+
+        self.embed_dim = embed_dim 
+        self.num_heads = num_heads
+        self.depth = depth
+        self.mlp_ratio = mlp_ratio
+        self.qkv_bias = qkv_bias 
+        self.optimizer_cfg = optimizer_cfg
+
+        self.pretrained_weights_path = pretrained_weights_path
+        self.target_length = target_length
+
+        self.queues = [torch.randn(self.queue_size, out_dim).to("cuda") for _ in range(self.modify_last_n)]
+
+        self.load_pretrained_weights(pretrained_weights_path, "XCL")
+
+    # def forward_features(self, x):
+    #     B = x.shape[0]
+    #     x = self.patch_embed(x) # batch, patch, embed
+    #     x = x + self.pos_embed[:, 1:, :] 
+    #     cls_token = self.cls_token + self.pos_embed[:, :1, :]
+    #     cls_tokens = cls_token.expand(B, -1, -1) 
+    #     x = torch.cat((cls_tokens, x), dim=1)
+    #     x = self.pos_drop(x)        
+
+    #     for blk in self.blocks:
+    #         x = blk(x)
+
+    #     x = x[:, 1:, :].mean(dim=1)  # global pool without cls token
+    #     outcome = self.fc_norm(x)
+
+
+    #     return outcome
+
+    # def forward(self, x):
+    #     x = self.forward_features(x)
+    #     pred = self.head(x)
+    #     return pred 
+
+
+    def forward(self, x):
+        B = x.shape[0]
+        x = self.encoder.patch_embed(x)
+        x = x + self.encoder.pos_embed[:, 1:, :] 
+        cls_token = self.encoder.cls_token + self.encoder.pos_embed[:, :1, :]
+        cls_tokens = cls_token.expand(B, -1, -1) 
+        x = torch.cat((cls_tokens, x), dim=1)
+        x = self.encoder.pos_drop(x)      
+        # # pre-transformer layers
+        # x = self.vit.to_patch_embedding(x)
+        # x = self.vit.dropout(x)
+
+        # transformer layers
+        zs = []
+        for i, block in enumerate(self.encoder.blocks):
+            x = block(x)
+
+            if i >= self.start_modify:
+                intermediate_x = x[:,0] #cls_token
+                # projector
+                z = self.projectors[i - self.start_modify](intermediate_x)
+                zs.append(z)
+
+        # # post-transformer layers
+        # x = self.encoder.to_latent(x)
+        # x = self.vit.mlp_head(x)
+
+        return zs
+
+
+    def training_step(self, batch, batch_idx):
+        audio = batch["audio"]
+        zs = self(audio)
+
+        contrastive_loss = 0 
+
+        NN_zs = []
+        for idx, (z, queue, predictor) in enumerate(zip(zs, self.queues, self.predictors)):
+            NN_z = self.NN(z, queue)
+            NN_zs.append(NN_z) # retrieve nearest neighbor for each layer
+            self.queues[idx] = self.update_queue(queue, z) # update queue for each layer
+
+            h = predictor(z)
+            contrastive_loss += loss_fn(NN_z, h, self.temperature)
+
+        contrastive_loss /= len(zs) # average over layers, maybe give different weights to different layers?
+
+        self.update_ema(self.encoder, self.encoder_ema, self.momentum) # keeping track of EMA for downstream tasks
+
+        self.log("train_contrastive_loss", contrastive_loss, on_step=True, on_epoch=True, prog_bar=True)
+
+        return contrastive_loss
+    
+    def update_queue(self, queue, new_embeddings):
+        return torch.cat((queue, new_embeddings.detach()), dim=0)[-self.queue_size:]  # Keep only the most recent `queue_size` entries
+    
+    def update_ema(self, model, ema_model, decay):
+        with torch.no_grad():
+            for param, ema_param in zip(model.parameters(), ema_model.parameters()):
+                ema_param.data = decay * ema_param.data + (1 - decay) * param.data
+
+    def NN(self, key, Queue):
+        # Nearest Neighbor function to retrieve the positive in the queue
+        key = normalize(key, dim=1)
+        Queue = normalize(Queue, dim=1)
+        similarities = torch.matmul(key, Queue.T)
+        nn_indices = similarities.argmax(dim=1)
+        return Queue[nn_indices]
+
+    def configure_optimizers(self):
+        #heuristic:
+        # eff_batch_size = self.trainer.accumulate_grad_batches * self.trainer.num_devices * self.train_batch_size
+        # self.optimizer_cfg["lr"] = self.optimizer_cfg["lr"] * eff_batch_size / 48
+        # print("effective learning rate:", self.optimizer_cfg["lr"], self.layer_decay)
+
+        params = list(self.encoder.parameters())
+
+        for i in range(len(self.predictors)):
+            params += list(self.projectors[i].parameters()) + list(self.predictors[i].parameters())
+        
+        self.optimizer = torch.optim.AdamW(
+            lr=self.optimizer_cfg.target["lr"],
+            weight_decay=self.optimizer_cfg.target["weight_decay"],
+            betas=(0.9, 0.95),
+            params=params
+        )
+    
+        num_training_steps = self.trainer.estimated_stepping_batches
+        warmup_ratio = 0.2 # hard coded
+        num_warmup_steps = num_training_steps * warmup_ratio
+
+        scheduler = CosineWarmupScheduler(
+            optimizer=self.optimizer,
+            warmup_steps=num_warmup_steps,
+            total_steps=num_training_steps
+        )
+
+        scheduler_dict = {
+            "scheduler": scheduler,
+            "interval": "step",  # Update at every step
+            "frequency": 1,
+            "name": "lr_cosine"
+        }
+
+        return {"optimizer": self.optimizer, "lr_scheduler": scheduler_dict}
+        
+    def load_pretrained_weights(self, pretrained_weights_path, dataset_name): 
+        img_size = (self.target_length, 128)
+        #img_size = (128, self.target_length) # should be correcter, but not pretrained this way
+
+        if self.target_length == 512: #esc50, hsn, 5 seconds
+            #num_patches = 512 # audioset
+            if "xc" in self.pretrained_weights_path or "XCL" in self.pretrained_weights_path:
+                num_patches = 256 # birdset
+            else:
+                num_patches = 512 # audioset
+
+            self.encoder.patch_embed = PatchEmbed(img_size, 16, 1, self.encoder.embed_dim)
+            #self.patch_embed = PatchEmbed_org(img_size, 16, 1, self.embed_dim)
+            self.encoder.pos_embed = nn.Parameter(torch.zeros(1, num_patches + 1, self.encoder.embed_dim), requires_grad=False) #to load pretrained pos embed
+            try:
+                pre_state_dict = torch.load(pretrained_weights_path, map_location="cpu")["model"]
+            except:
+                pre_state_dict = torch.load(pretrained_weights_path, map_location="cpu")["state_dict"]
+
+            pretrained_state_dict = {}
+
+            for key, value in pre_state_dict.items():
+                if key.startswith("decoder."):
+                    # Skip any key that starts with "decoder."
+                    continue
+                elif key.startswith("encoder."):
+                    # Remove the "encoder." prefix
+                    new_key = key[len("encoder."):]
+                else:
+                    # Use the original key if no prefix
+                    new_key = key
+                
+                # Add the modified key-value pair to the new state dict
+                pretrained_state_dict[new_key] = value
+            
+            info = self.encoder.load_state_dict(pretrained_state_dict, strict=False)
+
+            patch_hw = (img_size[1] // 16, img_size[0] // 16) # 16=patchsize
+            #patch_hw = (img_size[0] // 16, img_size[1] // 16) 
+            pos_embed = get_2d_sincos_pos_embed_flexible(self.encoder.pos_embed.size(-1), patch_hw, cls_token=True) # not trained, overwrite from sincos
+            self.encoder.pos_embed.data = torch.from_numpy(pos_embed).float().unsqueeze(0) 
+
+        elif self.target_length == 1024: #audioset, 10 seconds
+
+            self.encoder.patch_embed = PatchEmbed_new(img_size=img_size, patch_size=(16,16), in_chans=1, embed_dim=self.embed_dim, stride=16) # no overlap. stride=img_size=16
+           
+            if "xc" in self.pretrained_weights_path:
+                num_patches = 256 # birdset # does not work right now 
+            else:
+                num_patches =  num_patches = self.patch_embed.num_patches # audioset
+            #num_patches = 512 # assume audioset, 1024//16=64, 128//16=8, 512=64x8
+            self.encoder.pos_embed = nn.Parameter(torch.zeros(1, num_patches + 1, self.embed_dim), requires_grad=False)  # fixed sin-cos embedding
+
+            checkpoint = torch.load(pretrained_weights_path, map_location="cpu")
+            try:
+                pre_state_dict = checkpoint["model"]
+            except:
+                pre_state_dict = checkpoint["state_dict"]
+
+            pretrained_state_dict = {}
+
+            for key, value in pre_state_dict.items():
+                if key.startswith("decoder."):
+                    # Skip any key that starts with "decoder."
+                    continue
+                elif key.startswith("encoder."):
+                    # Remove the "encoder." prefix
+                    new_key = key[len("encoder."):]
+                else:
+                    # Use the original key if no prefix
+                    new_key = key
+                
+                # Add the modified key-value pair to the new state dict
+                pretrained_state_dict[new_key] = value
+
+            state_dict = self.state_dict()
+
+            for k in ["head.weight", "head.bias"]:
+                if k in pretrained_state_dict and pretrained_state_dict[k].shape != state_dict[k].shape:
+                    print(f"Removing key {k} from pretrained checkpoint")
+                    del pretrained_state_dict[k]
+
+            self.encoder.load_state_dict(pretrained_state_dict, strict=False)
+
+            trunc_normal_(self.head.weight, std=2e-5)
+
+
+class Predictor(nn.Module):
+    def __init__(self, hidden_dim, out_dim=256):
+        super().__init__()
+        self.net = nn.Sequential(
+            nn.Linear(out_dim, hidden_dim, bias=False),
+            nn.BatchNorm1d(hidden_dim),
+            nn.ReLU(inplace=True),
+            nn.Linear(hidden_dim, out_dim)
+        )
+
+    def forward(self, x):
+        return self.net(x)
+
+
+def normalize(x, dim=-1):
+    return F.normalize(x, p=2, dim=dim)
+
+def loss_fn(nn, p, temperature=0.1):
+    nn = normalize(nn, dim=1)
+    p = normalize(p, dim=1)
+    logits = torch.matmul(nn, p.T)
+    logits /= temperature
+    labels = torch.arange(p.size(0), device=p.device)
+    return F.cross_entropy(logits, labels)

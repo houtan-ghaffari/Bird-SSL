@@ -32,9 +32,12 @@ pos_trainable: False
 #pretrained_weights_path_: /home/lrauch/mnt_check/pretrain_xcl_wave_large/runs/XCL/AudioMAE/2024-12-24_103957/callback_checkpoints/AudioMAE_XCL_epoch=54.ckpt <--- swinv2
 #pretrained_weights_path: /home/lrauch/mnt_check/pretrain_xcl_wave_large/runs/XCL/AudioMAE/2024-12-20_143556/callback_checkpoints/AudioMAE_XCL_epoch=99.ckpt #<--- bestrep
 #pretrained_weights_path: /home/lrauch/AudioMAE_XCL_epoch99_2024-12-20_143556rep
-pretrained_weights_path: /home/lrauch/AudioMAE_XCL_epoch150_213828.ckpt
+#pretrained_weights_path: /home/lrauch/AudioMAE_XCL_epoch150_213828.ckpt
+pretrained_weights_path: /home/lrauch/projects/birdMAE/logs/refine_xcm/runs/XCM/VIT_MIM/2025-01-27_164525/callback_checkpoints/VIT_MIM_XCM_epoch=09.ckpt
 #pretrained_weights_path: /home/lrauch/mnt_check/finetune_xcl/runs/XCL/VIT/2025-01-06_103326/callback_checkpoints/VIT_XCL_epoch=01.ckpt
 #pretrained_weights_path: /home/lrauch/VIT_XCL_epoch01_ft_from143556.ckpt
+#pretrained_weights_path: /home/lrauch/mnt_check/pretrain_xcl_wave_large/runs/XCL/AudioMAE/2025-01-16_091017/callback_checkpoints/AudioMAE_XCL_epoch=149.ckpt #permute
+#pretrained_weights_path: /home/lrauch/projects/birdMAE/logs/refine_xcm/runs/XCM/VIT_MIM/2025-01-27_142211/callback_checkpoints/VIT_MIM_XCM_epoch=00.ckpt
 #pretrained_weights_path: null
 #pretrained_weights_path: /home/lrauch/AudioMAE_XCL_epoch=99_mixup_l.ckpt
 
