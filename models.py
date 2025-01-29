@@ -1594,42 +1594,42 @@ class VIT_ppnet(L.LightningModule,VisionTransformer):
 
             pretrained_state_dict = {}
 
-           # if "encoder_ema.cls_token" not in pre_state_dict: # without mim refiner
-            for key, value in pre_state_dict.items():
-                if key.startswith("decoder."):
-                    # Skip any key that starts with "decoder."
-                    continue
-                elif key.startswith("encoder."):
-                    # Remove the "encoder." prefix
-                    new_key = key[len("encoder."):]
-                else:
-                    # Use the original key if no prefix
-                    new_key = key
-                
-                # Add the modified key-value pair to the new state dict
-                pretrained_state_dict[new_key] = value
-
-           # else: # with mim refiner
-                # for key, value in pre_state_dict.items():
-                #     if key.startswith("decoder."):
-                #         # Skip any key that starts with "decoder."
-                #         continue
-                #     elif key.startswith("encoder."):
-                #         # Remove the "encoder." prefix
-                #         continue
-                #     elif key.startswith("projectors."):
-                #         continue
-                #     elif key.startswith("predictors."):
-                #         continue
-                #     elif key.startswith("encoder_ema."):
-                #         # Remove the "encoder_ema." prefix
-                #         new_key = key[len("encoder_ema."):]
-                #     else:
-                #         # Use the original key if no prefix
-                #         new_key = key
+            if "encoder_ema.cls_token" not in pre_state_dict: # without mim refiner
+                for key, value in pre_state_dict.items():
+                    if key.startswith("decoder."):
+                        # Skip any key that starts with "decoder."
+                        continue
+                    elif key.startswith("encoder."):
+                        # Remove the "encoder." prefix
+                        new_key = key[len("encoder."):]
+                    else:
+                        # Use the original key if no prefix
+                        new_key = key
                     
-                #     # Add the modified key-value pair to the new state dict
-                #     pretrained_state_dict[new_key] = value
+                    # Add the modified key-value pair to the new state dict
+                    pretrained_state_dict[new_key] = value
+
+            else: # with mim refiner
+                for key, value in pre_state_dict.items():
+                    if key.startswith("decoder."):
+                        # Skip any key that starts with "decoder."
+                        continue
+                    elif key.startswith("encoder."):
+                        # Remove the "encoder." prefix
+                        continue
+                    elif key.startswith("projectors."):
+                        continue
+                    elif key.startswith("predictors."):
+                        continue
+                    elif key.startswith("encoder_ema."):
+                        # Remove the "encoder_ema." prefix
+                        new_key = key[len("encoder_ema."):]
+                    else:
+                        # Use the original key if no prefix
+                        new_key = key
+                    
+                    # Add the modified key-value pair to the new state dict
+                    pretrained_state_dict[new_key] = value
 
             for k in ['head.weight', 'head.bias']:
                 if k in pretrained_state_dict: #and pretrained_state_dict[k].shape != self.state_dict[k].shape:
@@ -1741,6 +1741,10 @@ class VIT_MIM(L.LightningModule):
             num_classes = 1,
             drop_path_rate=drop_path,
         )
+        self.pretrained_weights_path = pretrained_weights_path
+        self.target_length = target_length
+
+        self.load_pretrained_weights(pretrained_weights_path, "XCL")
         
         #self.encoder.load_pretrained_weights(pretrained_weights_path, "XCL")
 
@@ -1749,13 +1753,13 @@ class VIT_MIM(L.LightningModule):
             p.requires_grad = False
 
         #del self.encoder.head
-        del self.encoder.norm
-        del self.encoder.fc_norm
-        del self.encoder.head_drop
+        # del self.encoder.norm
+        # del self.encoder.fc_norm
+        # del self.encoder.head_drop
 
-        del self.encoder_ema.norm
-        del self.encoder_ema.fc_norm
-        del self.encoder_ema.head_drop
+        # del self.encoder_ema.norm
+        # del self.encoder_ema.fc_norm
+        # del self.encoder_ema.head_drop
 
         
         proj_dim = mim_cfg.proj_dim
@@ -1813,12 +1817,11 @@ class VIT_MIM(L.LightningModule):
         self.qkv_bias = qkv_bias 
         self.optimizer_cfg = optimizer_cfg
 
-        self.pretrained_weights_path = pretrained_weights_path
-        self.target_length = target_length
+        
 
         self.queues = [torch.randn(self.queue_size, out_dim).to("cuda") for _ in range(self.modify_last_n)]
 
-        self.load_pretrained_weights(pretrained_weights_path, "XCL")
+        
 
     # def forward_features(self, x):
     #     B = x.shape[0]
@@ -1862,7 +1865,9 @@ class VIT_MIM(L.LightningModule):
             x = block(x)
 
             if i >= self.start_modify:
-                intermediate_x = x[:,0] #cls_token
+                #intermediate_x = x[:,0] #cls_token
+                intermediate_x = x[:, 1:, :].mean(dim=1)  # global pool without cls token
+                intermediate_x = self.fc_norm(intermediate_x)
                 # projector
                 z = self.projectors[i - self.start_modify](intermediate_x)
                 zs.append(z)
