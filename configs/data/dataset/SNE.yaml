@@ -1,8 +1,8 @@
 hf_path: DBD-research-group/BirdSet
-hf_name: POW
+hf_name: SNE
 dataset_dir: ${paths.dataset_dir}
-name: POW
-num_classes: 48
+name: SNE
+num_classes: 56
 clip_duration: 5.0
 train_split: "train"
 test_split: "test"
@@ -16,8 +16,13 @@ std: 4.43
 # save_to_disk: /home/lrauch/projects/birdMAE/data/HSN/HSN_processed_42_c205f09fc5635d1e
 #save_to_disk: /home/lrauch/projects/birdMAE/data/HSN/HSN_processed_42_cdb073221fc18e3d
 
-#save_to_disk: /home/lrauch/projects/birdMAE/data/POW/POW_processed_42_38d2b8b85681b12a
-save_to_disk: /home/lrauch/projects/birdMAE/data/POW/POW_5shot
+#save_to_disk: /home/lrauch/projects/birdMAE/data/HSN/HSN_processed_42_8fc39823e3ef9314
+#save_to_disk: /home/lrauch/projects/birdMAE/data/HSN/HSN_16shot
+#save_to_disk: /home/lrauch/projects/birdMAE/data/HSN/HSN_8shot
+#save_to_disk: /home/lrauch/projects/birdMAE/data/HSN/HSN_2shot
+save_to_disk: /home/lrauch/projects/birdMAE/data/SNE/SNE_32shot
+
+
 #save_to_disk: /home/lrauch/projects/birdMAE/data/HSN/HSN_processed_42_876267698be39955
 #save_to_disk: /home/lrauch/projects/birdMAE/data/HSN/HSN_processed_42_876267698be39955_removesub5
 

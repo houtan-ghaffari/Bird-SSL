@@ -112,6 +112,8 @@ class LinearLayerWithoutNegativeConnections(nn.Module):
         # Calculate the number of features per output class
         self.features_per_output_class = in_features // out_features
 
+        print(self.in_features, self.out_features, self.features_per_output_class)
+
         # Ensure input size is divisible by the output size
         assert (
             in_features % out_features == 0

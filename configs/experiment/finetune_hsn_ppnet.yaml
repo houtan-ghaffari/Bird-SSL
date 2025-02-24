@@ -65,4 +65,6 @@ module:
   network:
     ema_update_rate: null
     name: VIT_ppnet
+    ppnet:
+      num_prototypes: 420
       

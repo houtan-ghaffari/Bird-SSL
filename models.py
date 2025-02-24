@@ -1250,10 +1250,15 @@ class VIT_ppnet(L.LightningModule,VisionTransformer):
                  mask_f_prob,
                  mask2d,
                  ema_update_rate,
-                 ppnet_cfg
+                 ppnet_cfg,
+                 mask_inference
     ):
         
         L.LightningModule.__init__(self)
+
+        if mask_inference:
+            num_classes = 411 # XCL overwrite 
+            ppnet_cfg.num_classes = num_classes
         
         VisionTransformer.__init__(
             self,
@@ -1346,6 +1351,18 @@ class VIT_ppnet(L.LightningModule,VisionTransformer):
         self.ema = None
         if self.ema_update_rate: 
             self.ema = EMA(self, decay=ema_update_rate)
+
+        
+        self.class_mask = None
+        if mask_inference:
+            print("Logit Masking")
+            hf_path = "DBD-research-group/BirdSet"
+            hf_name = "XCM"
+            pretrain_labels = datasets.load_dataset_builder(
+                hf_path, hf_name, trust_remote_code=True).info.features["ebird_code"]
+            inference_labels = datasets.load_dataset_builder(
+                hf_path, mask_inference, trust_remote_code=True).info.features["ebird_code"]
+            self.class_mask = [pretrain_labels.names.index(i) for i in inference_labels.names]
         
         del self.head
         #del self.norm
@@ -1372,7 +1389,10 @@ class VIT_ppnet(L.LightningModule,VisionTransformer):
             x_cls = x[:, 0, :]
             x_patch = x[:, 1:, :] 
             z_f = x_patch - x_cls.unsqueeze(1) 
-            x = z_f.permute(0, 2, 1).reshape(B, self.embed_dim, 8, 32)
+            try:
+                x = z_f.permute(0, 2, 1).reshape(B, self.embed_dim, 8, 32)
+            except:
+                x = z_f.permute(0, 2, 1).reshape(B, self.embed_dim, 8, 64) # audioset
         else:
             x = x[:,1:,:].permute(0,2,1).reshape(B, self.embed_dim, 8, 32)
 
@@ -1457,6 +1477,11 @@ class VIT_ppnet(L.LightningModule,VisionTransformer):
         self.mask_f_prob = 0.0 #fix later!
 
         pred = self(audio)
+        if self.class_mask: 
+        # if targets.shape == pred.shape:
+        #     targets = targets[:, self.class_mask]
+            pred = pred[:, self.class_mask]
+
         targets = targets.long()
         try:
             loss  = self.loss(pred, targets)
@@ -1638,6 +1663,12 @@ class VIT_ppnet(L.LightningModule,VisionTransformer):
             
             info = self.load_state_dict(pretrained_state_dict, strict=False)
 
+            if not self.class_mask:
+                for k in ['head.weight', 'head.bias']:
+                    if k in pretrained_state_dict: #and pretrained_state_dict[k].shape != self.state_dict[k].shape:
+                        print(f"Removing key {k} from pretrained checkpoint")
+                        del pretrained_state_dict[k]
+
             patch_hw = (img_size[1] // 16, img_size[0] // 16) # 16=patchsize
             #patch_hw = (img_size[0] // 16, img_size[1] // 16) 
             pos_embed = get_2d_sincos_pos_embed_flexible(self.pos_embed.size(-1), patch_hw, cls_token=True) # not trained, overwrite from sincos
@@ -1685,7 +1716,10 @@ class VIT_ppnet(L.LightningModule,VisionTransformer):
 
             self.load_state_dict(pretrained_state_dict, strict=False)
 
-            trunc_normal_(self.head.weight, std=2e-5)
+            try:
+                trunc_normal_(self.head.weight, std=2e-5)
+            except:
+                print("no head")
 
 
     def calculate_orthogonality_loss(self) -> torch.Tensor:
