@@ -112,6 +112,8 @@ class LinearLayerWithoutNegativeConnections(nn.Module):
         # Calculate the number of features per output class
         self.features_per_output_class = in_features // out_features
 
+        print(self.in_features, self.out_features, self.features_per_output_class)
+
         # Ensure input size is divisible by the output size
         assert (
             in_features % out_features == 0
@@ -293,7 +295,7 @@ class PPNet(nn.Module):
             if self.non_negative_last_layer:
                 self.last_layer = NonNegativeLinear(
                     self.num_prototypes, self.num_classes, bias=self.use_bias_last_layer
-                )
+                ) # kann nur charakteristische prototypen lernen (im pipnet paper)
             else:
                 self.last_layer = nn.Linear(
                     self.num_prototypes, self.num_classes, bias=self.use_bias_last_layer
@@ -348,6 +350,73 @@ class PPNet(nn.Module):
         output = self.add_on_layers(features) # 64, 1024, 16, 64
 
         return output
+
+    def l1_activation(
+            self,
+            x: torch.Tensor,
+            prototypes_of_wrong_class: Optional[torch.Tensor] = None,
+        ) -> Tuple[torch.Tensor, torch.Tensor]:
+        """
+        Compute the L2 (Euclidean) activation between the input tensor x and the prototype vectors.
+        For each patch in x and each prototype in self.prototype_vectors, we compute the squared L2 distance:
+        
+            d = ||x_patch||^2 + ||p||^2 - 2 * (x_patch • p)
+        
+        Then, we transform this distance into a similarity score as:
+        
+            s = log((d + 1) / (d + epsilon))
+        
+        Global max pooling over the spatial dimensions is applied to obtain one score per prototype.
+        
+        If margin adjustments are enabled (and prototypes_of_wrong_class is provided), a margin is subtracted
+        for the wrong-class prototypes.
+        
+        Parameters:
+            x : torch.Tensor
+                Input tensor with shape (batch_size, num_channels, H, W).
+            prototypes_of_wrong_class : Optional[torch.Tensor]
+                Tensor for wrong-class prototypes (used for margin adjustments).
+        
+        Returns:
+            Tuple[torch.Tensor, torch.Tensor]:
+                - activations: The similarity scores with margin adjustments (if applicable).
+                - marginless_activations: The similarity scores without margin adjustments.
+        """
+        # Compute squared norm for each patch in x: shape (batch_size, 1, H, W)
+        x_norm_sq = torch.sum(x ** 2, dim=1, keepdim=True)
+        
+        # Compute squared norm for each prototype.
+        # Assume self.prototype_vectors has shape (num_prototypes, num_channels, prototype_H, prototype_W)
+        p_norm_sq = torch.sum(self.prototype_vectors ** 2, dim=1, keepdim=True)  # shape: (num_prototypes, 1, 1, 1)
+        
+        # Compute dot product between x and prototypes using convolution.
+        # Resulting shape: (batch_size, num_prototypes, H, W)
+        dot_product = nn.functional.conv2d(x, self.prototype_vectors)
+        
+        # Compute squared Euclidean distance: d = ||x||^2 + ||p||^2 - 2 * (x • p)
+        d = x_norm_sq + p_norm_sq - 2 * dot_product
+        d = torch.clamp(d, min=0.0)  # Ensure non-negative distances
+        
+        # Transform distance into similarity:
+        # s = log((d + 1) / (d + epsilon)), where self.epsilon_val is a small constant to avoid division by zero.
+        similarity = torch.log((d + 1.0) / (d + self.epsilon_val))
+        
+        # Global max pooling over spatial dimensions (H and W) to get a single similarity score per prototype.
+        marginless_activations = torch.amax(similarity, dim=[2, 3])  # shape: (batch_size, num_prototypes)
+        
+        if self.margin is None or not self.training or prototypes_of_wrong_class is None:
+            activations = marginless_activations
+        else:
+            # For margin adjustments, subtract a margin for wrong-class prototypes.
+            # Here, we assume prototypes_of_wrong_class has shape (batch_size, num_prototypes)
+            wrong_class_margin = (prototypes_of_wrong_class * self.margin).view(x.size(0),
+                                                                            self.prototype_vectors.size(0),
+                                                                            1, 1)
+            wrong_class_margin = wrong_class_margin.expand(-1, -1, similarity.size(2), similarity.size(3))
+            penalized_similarity = torch.log((d + 1.0) / (d + self.epsilon_val)) - wrong_class_margin
+            activations = torch.amax(penalized_similarity, dim=[2, 3])
+        
+        return activations, marginless_activations
 
     def cos_activation(
         self,
@@ -833,5 +902,5 @@ class PPNet(nn.Module):
 
         # Initialize the last layer with incorrect connections using specified incorrect class connection strength
         self.set_last_layer_incorrect_connection(
-            incorrect_strength=self.incorrect_class_connection
+            incorrect_strength=self.incorrect_class_connection # sind abgestellt, keine connections 
         )

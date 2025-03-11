@@ -16,7 +16,10 @@ std: 4.43
 # save_to_disk: /home/lrauch/projects/birdMAE/data/HSN/HSN_processed_42_c205f09fc5635d1e
 #save_to_disk: /home/lrauch/projects/birdMAE/data/HSN/HSN_processed_42_cdb073221fc18e3d
 
-save_to_disk: /home/lrauch/projects/birdMAE/data/UHH/UHH_processed_42_3c942654f85d89e6
+#save_to_disk: /home/lrauch/projects/birdMAE/data/UHH/UHH_processed_42_3c942654f85d89e6
+#save_to_disk: /home/lrauch/projects/birdMAE/data/UHH/UHH_64shot
+save_to_disk: /home/lrauch/projects/birdMAE/data/POW/UHH_processed_42_fd75f5d4aea1bda7 #128, 2 per recording
+
 #save_to_disk: /home/lrauch/projects/birdMAE/data/HSN/HSN_processed_42_876267698be39955
 #save_to_disk: /home/lrauch/projects/birdMAE/data/HSN/HSN_processed_42_876267698be39955_removesub5
 

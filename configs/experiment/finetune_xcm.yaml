@@ -9,7 +9,7 @@ defaults:
   #- override /module/network: convnext.yaml
   - override /module/optimizer: adamw
   - override /module/scheduler: cosine
-  - override /module/loss: binary_cross_entropy
+  - override /module/loss: asymmetric_loss
   - override /module/metric: birdset_collection
   - override /paths: workstation
   - override /trainer: single_gpu
@@ -32,6 +32,8 @@ data:
       shuffle: true
   dataset:
     columns: ["filepath", "labels", "detected_events", "start_time", "end_time"]
+    test_in_val: false
+    saved_images: null
 
     
 trainer:

@@ -24,6 +24,7 @@ mask_t_prob: ${data.transform.mask_t_prob}
 mask_f_prob: ${data.transform.mask_f_prob}
 freeze_backbone: false
 ema_update_rate: null
+mask_inference: null
 
 ppnet: 
   num_prototypes: 315

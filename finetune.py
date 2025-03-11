@@ -4,7 +4,7 @@ import torch
 import lightning as L
 import sys
 import datasets
-
+import torch.nn as nn 
 from omegaconf import OmegaConf, DictConfig
 import pyrootutils
 from pathlib import Path 
@@ -86,6 +86,18 @@ def finetune(cfg: DictConfig):
             for name, param in model.named_parameters():
                 if 'head' not in name:
                     param.requires_grad = False
+        
+        if cfg.module.network.get("head", None) == "MLP":
+            in_features = model.head.in_features
+            out_features = model.head.out_features
+
+            head = nn.Sequential(
+                nn.Linear(in_features, 512),
+                nn.ReLU(),
+                nn.Linear(512, out_features)
+            )
+
+            model.head = head
                 
     object_dict = {
         "cfg": cfg, 

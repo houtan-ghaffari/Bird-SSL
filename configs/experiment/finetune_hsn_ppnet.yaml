@@ -60,9 +60,12 @@ module:
       #layer_decay: 0.75
       layer_decay: 0.75
       #decay_type: inverse_normal
-      decay_type: inverse_normal
+      decay_type: right
       
   network:
     ema_update_rate: null
     name: VIT_ppnet
+    freeze_backbone: false
+    ppnet:
+      num_prototypes: 420
       
