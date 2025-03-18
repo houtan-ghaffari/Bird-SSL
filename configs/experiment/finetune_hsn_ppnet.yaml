@@ -24,7 +24,7 @@ train: true
 test: true
 
 logger:
-  experiment_name: overnight_hsn_ppnet
+  experiment_name: ablate_hsn
 
 data:
   loaders:
@@ -65,7 +65,7 @@ module:
   network:
     ema_update_rate: null
     name: VIT_ppnet
-    freeze_backbone: false
+    freeze_backbone: False
     ppnet:
       num_prototypes: 420
       

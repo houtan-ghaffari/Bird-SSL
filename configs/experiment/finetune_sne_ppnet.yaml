@@ -64,8 +64,9 @@ module:
   network:
     ema_update_rate: null
     name: VIT_ppnet
+    freeze_backbone: false
     ppnet:
-      num_prototypes: 1120
+      num_prototypes: 1_120
 
 
       

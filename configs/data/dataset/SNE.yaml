@@ -20,7 +20,7 @@ std: 4.43
 #save_to_disk: /home/lrauch/projects/birdMAE/data/HSN/HSN_16shot
 #save_to_disk: /home/lrauch/projects/birdMAE/data/HSN/HSN_8shot
 #save_to_disk: /home/lrauch/projects/birdMAE/data/HSN/HSN_2shot
-save_to_disk: /home/lrauch/projects/birdMAE/data/SNE/SNE_32shot
+save_to_disk: /home/lrauch/projects/birdMAE/data/SNE/SNE_64shot_nfill
 
 
 #save_to_disk: /home/lrauch/projects/birdMAE/data/HSN/HSN_processed_42_876267698be39955

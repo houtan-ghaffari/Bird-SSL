@@ -254,8 +254,11 @@
 # python finetune.py experiment=paper/ablations/hsn_pp_frozen/amae_ppnet.yaml
 
 
-python finetune.py experiment=paper/ablations/hsn_mlp/100_epochs_mixup_mlp_base.yaml
-python finetune.py experiment=paper/ablations/hsn_mlp/100_epochs_mixup_mlp_huge.yaml
-python finetune.py experiment=paper/ablations/hsn_mlp/amae_mlp.yaml
-python finetune.py experiment=paper/ablations/hsn_linear/100_epochs_mixup_linear_huge.yaml
+# python finetune.py experiment=paper/ablations/hsn_mlp/100_epochs_mixup_mlp_base.yaml
+# python finetune.py experiment=paper/ablations/hsn_mlp/100_epochs_mixup_mlp_huge.yaml
+# python finetune.py experiment=paper/ablations/hsn_mlp/amae_mlp.yaml
+# python finetune.py experiment=paper/ablations/hsn_linear/100_epochs_mixup_linear_huge.yaml
 
+python finetune.py experiment=paper/fewshot/ppnet/hsn1shot.yaml
+python finetune.py experiment=paper/fewshot/ppnet/hsn5shot.yaml
+python finetune.py experiment=paper/fewshot/ppnet/hsn10shot.yaml

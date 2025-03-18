@@ -83,9 +83,15 @@ def finetune(cfg: DictConfig):
                 if 'ppnet' not in name:
                     param.requires_grad = False
         else:
-            for name, param in model.named_parameters():
-                if 'head' not in name:
-                    param.requires_grad = False
+            if cfg.module.network.global_pool == "attentive":
+                for name, param in model.named_parameters():
+                    if 'head' not in name and 'attentive_probe' not in name:
+                        param.requires_grad = False
+            else:
+                for name, param in model.named_parameters():
+                    if 'head' not in name:
+                        param.requires_grad = False
+            
         
         if cfg.module.network.get("head", None) == "MLP":
             in_features = model.head.in_features

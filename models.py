@@ -555,6 +555,10 @@ class VIT(L.LightningModule,VisionTransformer):
         self.decay_type = optimizer.extras.decay_type
         self.scheduler_cfg = scheduler
 
+        if self.global_pool == "attentive":
+            attentive_heads = self.embed_dim // self.num_heads
+            self.attentive_probe = AttentivePooling(self.embed_dim, attentive_heads)
+
         self.mask_2d = mask2d
         self.mask_t_prob = mask_t_prob
         self.mask_f_prob = mask_f_prob
@@ -595,6 +599,8 @@ class VIT(L.LightningModule,VisionTransformer):
             inference_labels = datasets.load_dataset_builder(
                 hf_path, mask_inference, trust_remote_code=True).info.features["ebird_code"]
             self.class_mask = [pretrain_labels.names.index(i) for i in inference_labels.names]
+        
+
 
     def forward_features(self, x):
         B = x.shape[0]
@@ -610,9 +616,12 @@ class VIT(L.LightningModule,VisionTransformer):
             x = blk(x)
             #x = torch.nan_to_num(x, nan=0.0) #????
 
-        if self.global_pool:
+        if self.global_pool != "attentive": # everything except attentive is global
             x = x[:, 1:, :].mean(dim=1)  # global pool without cls token
             outcome = self.fc_norm(x)
+        elif self.global_pool =="attentive":
+            outcome = self.attentive_probe(x)
+            outcome = self.fc_norm(outcome)
         else:
             x = self.norm(x)
             outcome = x[:, 0]
@@ -948,7 +957,7 @@ class EMA:
             for name, buffer in model.named_buffers():
                 self.shadow_buffers[name] = buffer.detach().clone()
 
-        # We'll store the base model’s original weights here (for restore)
+        # We'll store the base model's original weights here (for restore)
         self.backup_params = {}
         self.backup_buffers = {}
 
@@ -1222,6 +1231,7 @@ class ConvNext(L.LightningModule):
         return {"optimizer": self.optimizer}      
     
 from models_ppnet import PPNet
+#from models_ppnet import PPNetWithAttentivePrototype as PPNet
 
 class VIT_ppnet(L.LightningModule,VisionTransformer):
 
@@ -1954,11 +1964,11 @@ class VIT_MIM(L.LightningModule):
 
     def NN(self, key, Queue):
         # Nearest Neighbor function to retrieve the positive in the queue
-        key = normalize(key, dim=1)
-        Queue = normalize(Queue, dim=1)
-        similarities = torch.matmul(key, Queue.T)
-        nn_indices = similarities.argmax(dim=1)
-        return Queue[nn_indices]
+        key = F.normalize(key, dim=1)
+        Queue = F.normalize(Queue, dim=1)
+        similarity = torch.mm(key, Queue.t())
+        nearest_neighbors = similarity.max(dim=1)[1]
+        return Queue[nearest_neighbors]
 
     def configure_optimizers(self):
         #heuristic:
@@ -2110,18 +2120,16 @@ def loss_fn(nn, p, temperature=0.1):
     return F.cross_entropy(logits, labels)
 
 
-import torch
-import torch.nn as nn
-import torch.nn.functional as F
 
-class AttentivePoolingTorch(nn.Module):
+
+class AttentivePooling(nn.Module):
     def __init__(self, embed_dim, num_heads):
         """
         Args:
             embed_dim: Dimension of the patch embeddings.
             num_heads: Number of attention heads.
         """
-        super(AttentivePoolingTorch, self).__init__()
+        super(AttentivePooling, self).__init__()
         # Using torch's built-in multihead attention
         self.mha = nn.MultiheadAttention(embed_dim, num_heads, batch_first=True)
         # Learnable query parameter, shape: (1, 1, embed_dim)

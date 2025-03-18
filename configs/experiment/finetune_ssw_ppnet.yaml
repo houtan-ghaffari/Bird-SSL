@@ -1,7 +1,7 @@
 # @package _global_
 defaults:
   - override /callbacks: default
-  - override /data/dataset: UHH
+  - override /data/dataset: SSW
   - override /data/loaders: esc50
   - override /data/transform: melbank_birdset
   - override /logger: mlflow
@@ -17,13 +17,13 @@ defaults:
 
 seed: 42
 start_time: ${now:%Y-%m-%d_%H%M%S}
-task_name: "finetune_uhh"
+task_name: "finetune_ssw"
 
 train: true
 test: true
 
 logger:
-  experiment_name: overnight_uhh
+  experiment_name: overnight_ssw
 
 data:
   loaders:
@@ -59,13 +59,13 @@ module:
       #layer_decay: 0.75
       layer_decay: 0.75
       #decay_type: inverse_normal
-      decay_type: inverse_normal
+      decay_type: right
       
   network:
     ema_update_rate: null
     name: VIT_ppnet
     freeze_backbone: false
     ppnet:
-      num_prototypes: 540
+      num_prototypes: 1_620
 
       

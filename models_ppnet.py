@@ -2,7 +2,6 @@ import math
 from typing import Dict, List, Optional, Tuple
 import warnings
 
-import datasets
 import torch
 from torch import nn
 
@@ -904,3 +903,100 @@ class PPNet(nn.Module):
         self.set_last_layer_incorrect_connection(
             incorrect_strength=self.incorrect_class_connection # sind abgestellt, keine connections 
         )
+
+
+class PPNetWithAttentivePrototype(PPNet):
+    def __init__(self, *args, att_embed_dim: int = 1024, att_num_heads: int = 16, fusion_out_dim: int = None, **kwargs):
+        """
+        Args:
+            att_embed_dim: Dimension for the attentive branch (should match conv_features channels).
+            att_num_heads: Number of attention heads for the attentive probe.
+            fusion_out_dim: Dimension after fusion. If None, defaults to the prototype branch dimension (k × C).
+        """
+        super().__init__(*args, **kwargs)
+        # The attentive probe expects features of dimension att_embed_dim.
+        self.att_embed_dim = att_embed_dim  
+        self.attentive_probe = AttentivePooling(embed_dim=att_embed_dim, num_heads=att_num_heads)
+        # Prototype branch produces a vector of dimension = num_prototypes (k × C)
+        proto_dim = self.num_prototypes  
+        # We'll fuse by concatenating the two branches.
+        fusion_in_dim = proto_dim + self.att_embed_dim
+        if fusion_out_dim is None:
+            fusion_out_dim = proto_dim  # to match the expected input of the last_layer
+        self.fusion_layer = nn.Linear(fusion_in_dim, fusion_out_dim)
+    
+    def forward(self, x: torch.Tensor, prototypes_of_wrong_class: Optional[torch.Tensor] = None) -> Tuple[torch.Tensor, List[torch.Tensor]]:
+        # Get prototype activations and convolutional features using the original PPNet function.
+        activations, additional_returns = self.prototype_activations(x, prototypes_of_wrong_class=prototypes_of_wrong_class)
+        marginless_activations = additional_returns[0]
+        conv_features = additional_returns[1]  # Expected shape: (B, channels, H, W)
+        
+        B = activations.shape[0]
+        # --- Prototype Branch ---
+        # Reshape activations: (B, num_prototypes, spatial positions)
+        activations_reshaped = activations.view(B, activations.shape[1], -1)
+        # Top-k pooling over the spatial dimension (topk_k is defined in PPNet)
+        topk_activations, _ = torch.topk(activations_reshaped, self.topk_k, dim=-1)
+        mean_prototype_activations = torch.mean(topk_activations, dim=-1)  # (B, num_prototypes)
+        
+        # --- Attentive Branch ---
+        # Convert conv_features from (B, channels, H, W) to a sequence (B, H*W, channels)
+        B, C, H, W = conv_features.shape
+        feature_seq = conv_features.view(B, C, H * W).permute(0, 2, 1)
+        att_feature = self.attentive_probe(feature_seq)  # (B, att_embed_dim)
+        
+        # --- Fusion ---
+        # Concatenate along the feature dimension: (B, num_prototypes + att_embed_dim)
+        fused_input = torch.cat([mean_prototype_activations, att_feature], dim=-1)
+        fused_features = self.fusion_layer(fused_input)  # (B, fusion_out_dim)
+        
+        # For marginless activations, perform global max pooling as in the original PPNet.
+        marginless_max = nn.functional.max_pool2d(
+            marginless_activations,
+            kernel_size=(marginless_activations.size(2), marginless_activations.size(3))
+        ).view(B, -1)
+        
+        # Compute logits using the last classification layer.
+        logits = self.last_layer(fused_features)
+        marginless_logits = self.last_layer(marginless_max)
+        
+        return logits, [fused_features, marginless_logits, conv_features, marginless_max, marginless_activations]
+
+class AttentivePooling(nn.Module):
+    def __init__(self, embed_dim, num_heads):
+        """
+        Args:
+            embed_dim: Dimension of the patch embeddings.
+            num_heads: Number of attention heads.
+        """
+        super(AttentivePooling, self).__init__()
+        # Using torch's built-in multihead attention
+        self.mha = nn.MultiheadAttention(embed_dim, num_heads, batch_first=True)
+        # Learnable query parameter, shape: (1, 1, embed_dim)
+        # This query will be repeated for each sample in the batch.
+        self.query = nn.Parameter(torch.randn(1, 1, embed_dim))
+        
+    def forward(self, x):
+        """
+        Args:
+            x: Input tensor of shape (B, N, embed_dim) where the first token is the CLS token.
+        Returns:
+            Pooled features of shape (B, embed_dim).
+        """
+        # Exclude the CLS token and work on patch tokens only.
+        x_patch = x[:, 1:, :]  # shape: (B, N-1, embed_dim)
+        B = x_patch.shape[0]
+        
+        # Expand the learnable query for each instance in the batch.
+        # Query shape becomes: (B, 1, embed_dim)
+        query_expanded = self.query.expand(B, -1, -1)
+        
+        # Apply multihead attention:
+        # Query: (B, 1, embed_dim)
+        # Key, Value: (B, N-1, embed_dim)
+        # Output shape: (B, 1, embed_dim)
+        attn_output, attn_weights = self.mha(query_expanded, x_patch, x_patch)
+        
+        # Squeeze the sequence dimension to obtain (B, embed_dim)
+        pooled = attn_output.squeeze(1)
+        return pooled
