@@ -1,6 +1,6 @@
 import hydra
 from omegaconf import DictConfig, OmegaConf
-from models import AudioMAE, VIT, ConvNext, VIT_ppnet, VIT_MIM
+from models import AudioMAE, VIT, ConvNext, VIT_ppnet, VIT_MIM, BirdAVES
 from models_jepa import A_JEPA, VIT_JEPA
 from util import pylogger
 import lightning as L
@@ -150,6 +150,17 @@ def build_model(cfg_module: DictConfig):
             init_std=cfg_module.network.init_std,
             target_length=cfg_module.network.target_length,
         )
+
+    elif cfg_module.network.name == "BirdAVES-large":
+        module = BirdAVES(num_classes=cfg_module.network.num_classes,
+                          optimizer=cfg_module.optimizer,
+                          scheduler=cfg_module.scheduler,
+                          loss=cfg_module.loss,
+                          metric_cfg=cfg_module.metric,
+                          birdaves_cfg_path=cfg_module.network.birdaves_cfg,
+                          birdaves_weights_path=cfg_module.network.birdaves_weights_path,
+                          )
+
     else:
         raise ValueError(f"Model {cfg_module.network.name} not found")
 
