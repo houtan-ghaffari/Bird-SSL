@@ -2105,7 +2105,7 @@ class BirdAVES(L.LightningModule, nn.Module):
 
     def forward(self, x):
         features = self.model.extract_features(x.squeeze())[0][-1]
-        pred = self.head(features.mean(dim=1))
+        pred = self.classifier(features.mean(dim=1))
         return pred
 
     def training_step(self, batch, batch_idx):
@@ -2189,7 +2189,7 @@ class BirdAVES(L.LightningModule, nn.Module):
 
         self.optimizer = hydra.utils.instantiate(
             self.optimizer_cfg,
-            params=self.head.parameters())
+            params=self.classifier.parameters())
         # print("LAMB")
         # self.optimizer = LAMB(self.parameters(), lr=3e-4)
 

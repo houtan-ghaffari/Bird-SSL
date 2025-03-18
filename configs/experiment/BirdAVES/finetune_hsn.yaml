@@ -2,7 +2,7 @@
 defaults:
   - override /callbacks: default
   - override /data/dataset: HSN
-  - override /data/loaders: esc50
+  - override /data/loaders: audioset_balanced
   - override /data/transform: melbank_birdset
   - override /logger: mlflow
   - override /module/network: birdAVES.yaml

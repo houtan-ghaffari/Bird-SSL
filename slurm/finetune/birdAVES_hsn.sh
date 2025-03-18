@@ -6,8 +6,7 @@
 #SBATCH --job-name=birdAVES-hsn
 #SBATCH --output=/mnt/work/bird2vec/logs_mw/%x_%N_%t.log
 #SBATCH --time=96:00:00
-#SBATCH --exclude=gpu-a100-2,gpu-v100-[1-4]
-##SBATCH --nodelist=gpu-l40s-1
+#SBATCH --exclude=gpu-a100-2,gpu-v100-[1-4],gpu-l40s-1
 ####SBATCH --array=3-3%3
 
 date;hostname;pwd
