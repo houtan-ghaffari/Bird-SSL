@@ -220,13 +220,16 @@ class PPNet(nn.Module):
         """
 
         super().__init__()
+        #change so that it must not be calculated before
+        self.num_classes = num_classes
+        self.num_prototypes = num_prototypes * self.num_classes        
         self.prototype_shape = (
-            num_prototypes,
+            self.num_prototypes,
             channels_prototypes,
             h_prototypes,
             w_prototypes,
         )
-        self.num_prototypes = num_prototypes
+        #self.num_prototypes = num_prototypes
         self.num_prototypes_after_pruning = None
         self.margin = margin
         self.relu_on_cos = True
@@ -239,7 +242,6 @@ class PPNet(nn.Module):
         self.bias_last_layer = bias_last_layer
         self.non_negative_last_layer = non_negative_last_layer
         self.embedded_spectrogram_height = embedded_spectrogram_height
-        self.num_classes = num_classes
 
         if self.bias_last_layer:
             self.use_bias_last_layer = True

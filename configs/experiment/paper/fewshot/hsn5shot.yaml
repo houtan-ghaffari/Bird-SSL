@@ -1,6 +1,6 @@
 # @package _global_
 defaults:
-  - override /callbacks: default_ssl
+  - override /callbacks: default
   - override /data/dataset: HSN
   - override /data/loaders: esc50
   - override /data/transform: melbank_birdset
@@ -13,7 +13,7 @@ defaults:
   - override /module/loss: asymmetric_loss.yaml
   #- override /module/loss: binary_cross_entropy.yaml
   - override /module/metric: birdset_collection
-  - override /paths: cluster
+  - override /paths: workstation
   - override /trainer: single_gpu
 
 start_time: ${now:%Y-%m-%d_%H%M%S}
@@ -31,7 +31,7 @@ data:
       shuffle: true
       drop_last: true
   dataset:
-   save_to_disk: /scratch/birdset/HSN/HSN_5shot_1
+   save_to_disk: /home/lrauch/projects/birdMAE/data/HSN/HSN_5shot_1
 
 seed: 1
 
