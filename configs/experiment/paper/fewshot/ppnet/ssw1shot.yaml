@@ -33,7 +33,7 @@ seed: 1
 
 logger:
   experiment_name: fewshot_ssw
-  run_name: 1shot_ppnet_ssw_${seed}_${start_time}
+  run_name: 1shot_1_ppnet_ssw_${seed}_${start_time}
 
     
 trainer:

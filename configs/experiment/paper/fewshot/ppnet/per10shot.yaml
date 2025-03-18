@@ -33,7 +33,7 @@ seed: 1
 
 logger:
   experiment_name: fewshot_per
-  run_name: 10shot_ppnet_per_${seed}_${start_time}
+  run_name: 10shot_1_ppnet_per_${seed}_${start_time}
 
     
 trainer:

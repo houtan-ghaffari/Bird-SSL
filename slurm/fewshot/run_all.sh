@@ -5,15 +5,15 @@
 #SBATCH --gres=gpu:1
 #SBATCH --mem=100gb
 #SBATCH --partition=main
-#SBATCH --job-name=ppnet_fewshot_%a
-#SBATCH --output=/mnt/work/bird2vec/logs/fewshot/ppnet_%a_%x.log
-###SBATCH --time=24:00:00
-#SBATCH --array=0-71%8
+#SBATCH --job-name=fewshot_ppnet_%a
+#SBATCH --output=/mnt/work/bird2vec/logs/fewshot/fewshot_ppnet_%N_%a.log
+######SBATCH --time=01:00:00
 #SBATCH --nodelist=gpu-l40s-1
+#SBATCH --array=0-71%8
 
-date;hostname;pwd
+date; hostname; pwd
 source /mnt/home/lrauch/.zshrc
-echo Activate conda
+echo "Activate conda"
 conda activate gadme_v1
 echo $PYTHONPATH
 
@@ -22,39 +22,27 @@ cd /mnt/home/lrauch/projects/birdMAE/
 export CUDA_LAUNCH_BLOCKING=1
 export HYDRA_FULL_ERROR=1
 
-# Define arrays for datasets and seeds
+# Define arrays for datasets, shots, and seeds.
 DATASETS=("hsn" "nbp" "nes" "per" "pow" "sne" "ssw" "uhh")
 SHOTS=("1shot" "5shot" "10shot")
 SEEDS=(1 2 3)
 
-# Modify the index calculations to spread the load better
-GROUP_SIZE=8  # number of parallel jobs we want
-GROUP_INDEX=$((SLURM_ARRAY_TASK_ID % GROUP_SIZE))
-ITERATION=$((SLURM_ARRAY_TASK_ID / GROUP_SIZE))
+# Total experiments = 8 datasets * 3 shots = 24. Each config runs with 3 seeds → 72 tasks.
+# Compute configuration index and seed index (zsh arrays are 1-indexed).
+CONFIG_IDX=$(( SLURM_ARRAY_TASK_ID / 3 ))   # 0 to 23 (0-indexed)
+SEED_IDX=$(( SLURM_ARRAY_TASK_ID % 3 ))       # 0 to 2 (0-indexed)
 
-# Calculate indices
-DATASET_INDEX=$((GROUP_INDEX))
-REMAINING=$((ITERATION))
-SHOT_INDEX=$((REMAINING / 3))
-SEED_INDEX=$((REMAINING % 3))
+# Convert to 1-indexed positions for zsh arrays.
+DATASET_IDX=$(( CONFIG_IDX / 3 + 1 ))
+SHOT_IDX=$(( CONFIG_IDX % 3 + 1 ))
+SEED=${SEEDS[$(( SEED_IDX + 1 ))]}
 
-# Get the actual values
-DATASET=${DATASETS[$DATASET_INDEX]}
-SHOT=${SHOTS[$SHOT_INDEX]}
-SEED=${SEEDS[$SEED_INDEX]}
+# Construct the configuration path.
+CONFIG_PATH="experiment=paper/fewshot/ppnet/${DATASETS[$DATASET_IDX]}${SHOTS[$SHOT_IDX]}.yaml"
 
-# Construct the config path
-CONFIG_PATH="experiment=paper/fewshot/ppnet/${DATASET}${SHOT}.yaml"
+echo "Running experiment: ${CONFIG_PATH} with seed: ${SEED}"
 
-hostname
 srun python finetune.py \
-        $CONFIG_PATH \
-        module.network.pretrained_weights_path="'/mnt/work/bird2vec/logs_pretrain_audioset_MAE/pretrain_xcl_wave_large/runs/XCL/AudioMAE/2025-01-13_213828/callback_checkpoints/AudioMAE_XCL_epoch=149.ckpt'" \
-        seed=$SEED
-
-# Print information about the job
-echo "Running configuration:"
-echo "Dataset: $DATASET"
-echo "Shot: $SHOT"
-echo "Seed: $SEED"
-echo "Config path: $CONFIG_PATH" 
+    ${CONFIG_PATH} \
+    seed=${SEED} \
+    module.network.pretrained_weights_path="'/mnt/work/bird2vec/logs_pretrain_audioset_MAE/pretrain_xcl_wave_large/runs/XCL/AudioMAE/2025-01-13_213828/callback_checkpoints/AudioMAE_XCL_epoch=149.ckpt'"
