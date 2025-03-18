@@ -5,10 +5,10 @@
 #SBATCH --gres=gpu:1
 #SBATCH --mem=100gb
 #SBATCH --partition=main
-#SBATCH --job-name=ppnet_fewshot_%A_%a
-#SBATCH --output=/mnt/work/bird2vec/logs/fewshot/ppnet_%A_%a.log
-#SBATCH --time=24:00:00
-#SBATCH --array=0-62%3
+#SBATCH --job-name=ppnet_fewshot_%a
+#SBATCH --output=/mnt/work/bird2vec/logs/fewshot/ppnet_%a_%x.log
+###SBATCH --time=24:00:00
+#SBATCH --array=0-71%8
 #SBATCH --nodelist=gpu-l40s-1
 
 date;hostname;pwd
@@ -27,11 +27,16 @@ DATASETS=("hsn" "nbp" "nes" "per" "pow" "sne" "ssw" "uhh")
 SHOTS=("1shot" "5shot" "10shot")
 SEEDS=(1 2 3)
 
+# Modify the index calculations to spread the load better
+GROUP_SIZE=8  # number of parallel jobs we want
+GROUP_INDEX=$((SLURM_ARRAY_TASK_ID % GROUP_SIZE))
+ITERATION=$((SLURM_ARRAY_TASK_ID / GROUP_SIZE))
+
 # Calculate indices
-ARRAY_INDEX=$SLURM_ARRAY_TASK_ID
-DATASET_INDEX=$((ARRAY_INDEX / 9))  # 9 = 3 shots * 3 seeds
-SHOT_INDEX=$((ARRAY_INDEX % 9 / 3))  # 3 seeds
-SEED_INDEX=$((ARRAY_INDEX % 3))
+DATASET_INDEX=$((GROUP_INDEX))
+REMAINING=$((ITERATION))
+SHOT_INDEX=$((REMAINING / 3))
+SEED_INDEX=$((REMAINING % 3))
 
 # Get the actual values
 DATASET=${DATASETS[$DATASET_INDEX]}
