@@ -5,7 +5,7 @@ defaults:
   - override /data/loaders: audioset_balanced
   - override /data/transform: audio_birdset
   - override /logger: mlflow
-  - override /module/network: birdAVES.yaml
+  - override /module/network: protoCLR
   - override /module/optimizer: adamw
   - override /module/scheduler: cosine
   - override /module/loss: binary_cross_entropy
@@ -21,19 +21,18 @@ train: true
 test: true
 
 logger:
-  experiment_name: BirdAVES-large-hsn
+  experiment_name: protoCLR-hsn
 
 data:
   dataset:
-    target_length: 80000
+    target_length: 80_000 # 5 seconds, 96_000 (6 sec) does not work, error while data loading?
   loaders:
     train:
-      num_workers: 16
+      num_workers: 1
       batch_size: 64
       #batch_size: 20
       shuffle: true
       drop_last: true
-
 
 trainer:
   max_epochs: 60

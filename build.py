@@ -1,6 +1,6 @@
 import hydra
 from omegaconf import DictConfig, OmegaConf
-from models import AudioMAE, VIT, ConvNext, VIT_ppnet, VIT_MIM, BirdAVES
+from models import AudioMAE, VIT, ConvNext, VIT_ppnet, VIT_MIM, BirdAVES, SimCLR
 from models_jepa import A_JEPA, VIT_JEPA
 from util import pylogger
 import lightning as L
@@ -160,7 +160,15 @@ def build_model(cfg_module: DictConfig):
                           birdaves_cfg_path=cfg_module.network.birdaves_cfg,
                           birdaves_weights_path=cfg_module.network.birdaves_weights_path,
                           )
-
+    elif cfg_module.network.name == "ProtoCLR-simclr":
+        module = SimCLR(num_classes=cfg_module.network.num_classes,
+                        optimizer=cfg_module.optimizer,
+                        scheduler=cfg_module.scheduler,
+                        loss=cfg_module.loss,
+                        metric_cfg=cfg_module.metric,
+                        model_spec_cfg=cfg_module.network.model_spec_cfg,
+                        proto_clr_weights_path=cfg_module.network.proto_clr_weights_path
+                        )
     else:
         raise ValueError(f"Model {cfg_module.network.name} not found")
 
