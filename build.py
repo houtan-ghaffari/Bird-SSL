@@ -88,6 +88,7 @@ def build_model(cfg_module: DictConfig):
             mask_f_prob=cfg_module.network.mask_f_prob,
             ema_update_rate=cfg_module.network.ema_update_rate,
             ppnet_cfg=cfg_module.network.ppnet,
+            mask_inference=cfg_module.network.mask_inference
         )
 
     elif cfg_module.network.name == "VIT_MIM":

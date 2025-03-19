@@ -555,6 +555,10 @@ class VIT(L.LightningModule,VisionTransformer):
         self.decay_type = optimizer.extras.decay_type
         self.scheduler_cfg = scheduler
 
+        if self.global_pool == "attentive":
+            attentive_heads = self.embed_dim // self.num_heads
+            self.attentive_probe = AttentivePooling(self.embed_dim, attentive_heads)
+
         self.mask_2d = mask2d
         self.mask_t_prob = mask_t_prob
         self.mask_f_prob = mask_f_prob
@@ -595,6 +599,8 @@ class VIT(L.LightningModule,VisionTransformer):
             inference_labels = datasets.load_dataset_builder(
                 hf_path, mask_inference, trust_remote_code=True).info.features["ebird_code"]
             self.class_mask = [pretrain_labels.names.index(i) for i in inference_labels.names]
+        
+
 
     def forward_features(self, x):
         B = x.shape[0]
@@ -610,9 +616,12 @@ class VIT(L.LightningModule,VisionTransformer):
             x = blk(x)
             #x = torch.nan_to_num(x, nan=0.0) #????
 
-        if self.global_pool:
+        if self.global_pool != "attentive": # everything except attentive is global
             x = x[:, 1:, :].mean(dim=1)  # global pool without cls token
             outcome = self.fc_norm(x)
+        elif self.global_pool =="attentive":
+            outcome = self.attentive_probe(x)
+            outcome = self.fc_norm(outcome)
         else:
             x = self.norm(x)
             outcome = x[:, 0]
@@ -948,7 +957,7 @@ class EMA:
             for name, buffer in model.named_buffers():
                 self.shadow_buffers[name] = buffer.detach().clone()
 
-        # We'll store the base model’s original weights here (for restore)
+        # We'll store the base model's original weights here (for restore)
         self.backup_params = {}
         self.backup_buffers = {}
 
@@ -1222,6 +1231,7 @@ class ConvNext(L.LightningModule):
         return {"optimizer": self.optimizer}      
     
 from models_ppnet import PPNet
+#from models_ppnet import PPNetWithAttentivePrototype as PPNet
 
 class VIT_ppnet(L.LightningModule,VisionTransformer):
 
@@ -1250,10 +1260,15 @@ class VIT_ppnet(L.LightningModule,VisionTransformer):
                  mask_f_prob,
                  mask2d,
                  ema_update_rate,
-                 ppnet_cfg
+                 ppnet_cfg,
+                 mask_inference
     ):
         
         L.LightningModule.__init__(self)
+
+        if mask_inference:
+            num_classes = 411 # XCL overwrite 
+            ppnet_cfg.num_classes = num_classes
         
         VisionTransformer.__init__(
             self,
@@ -1346,6 +1361,18 @@ class VIT_ppnet(L.LightningModule,VisionTransformer):
         self.ema = None
         if self.ema_update_rate: 
             self.ema = EMA(self, decay=ema_update_rate)
+
+        
+        self.class_mask = None
+        if mask_inference:
+            print("Logit Masking")
+            hf_path = "DBD-research-group/BirdSet"
+            hf_name = "XCM"
+            pretrain_labels = datasets.load_dataset_builder(
+                hf_path, hf_name, trust_remote_code=True).info.features["ebird_code"]
+            inference_labels = datasets.load_dataset_builder(
+                hf_path, mask_inference, trust_remote_code=True).info.features["ebird_code"]
+            self.class_mask = [pretrain_labels.names.index(i) for i in inference_labels.names]
         
         del self.head
         #del self.norm
@@ -1372,7 +1399,10 @@ class VIT_ppnet(L.LightningModule,VisionTransformer):
             x_cls = x[:, 0, :]
             x_patch = x[:, 1:, :] 
             z_f = x_patch - x_cls.unsqueeze(1) 
-            x = z_f.permute(0, 2, 1).reshape(B, self.embed_dim, 8, 32)
+            try:
+                x = z_f.permute(0, 2, 1).reshape(B, self.embed_dim, 8, 32)
+            except:
+                x = z_f.permute(0, 2, 1).reshape(B, self.embed_dim, 8, 64) # audioset
         else:
             x = x[:,1:,:].permute(0,2,1).reshape(B, self.embed_dim, 8, 32)
 
@@ -1400,7 +1430,7 @@ class VIT_ppnet(L.LightningModule,VisionTransformer):
 
         loss = bce_loss + orthogonality_loss
 
-        #self.log('train_loss', loss, on_step=True, on_epoch=True, prog_bar=True)
+        self.log('train_loss', loss, on_step=True, on_epoch=True, prog_bar=True)
 
         if self.ema: 
             self.ema.update()
@@ -1457,6 +1487,11 @@ class VIT_ppnet(L.LightningModule,VisionTransformer):
         self.mask_f_prob = 0.0 #fix later!
 
         pred = self(audio)
+        if self.class_mask: 
+        # if targets.shape == pred.shape:
+        #     targets = targets[:, self.class_mask]
+            pred = pred[:, self.class_mask]
+
         targets = targets.long()
         try:
             loss  = self.loss(pred, targets)
@@ -1506,9 +1541,13 @@ class VIT_ppnet(L.LightningModule,VisionTransformer):
             )
 
         else:
+            print("TEST:",self.ppnet_cfg.last_layer_lr)
+            # self.optimizer = hydra.utils.instantiate(
+            #     self.optimizer_cfg, 
+            #     params=self.parameters())
             optimizer_specifications = []
 
-            # 1) Add the add_on_layers group
+            #1) Add the add_on_layers group
             addon_params = list(self.ppnet.add_on_layers.parameters())
             optimizer_specifications.append({
                 "params": addon_params,
@@ -1521,14 +1560,14 @@ class VIT_ppnet(L.LightningModule,VisionTransformer):
             proto_params = [self.ppnet.prototype_vectors]  # or list(...)
             optimizer_specifications.append({
                 "params": proto_params,
-                "lr": 0.05,
+                "lr": self.ppnet_cfg.prototype_lr,
             })
 
             # 3) Add the last_layer group
             last_params = list(self.ppnet.last_layer.parameters())
             optimizer_specifications.append({
                 "params": last_params,
-                "lr": 5e-4,
+                "lr": self.ppnet_cfg.last_layer_lr,
                 "weight_decay": 1e-4,
             })
 
@@ -1638,6 +1677,12 @@ class VIT_ppnet(L.LightningModule,VisionTransformer):
             
             info = self.load_state_dict(pretrained_state_dict, strict=False)
 
+            if not self.class_mask:
+                for k in ['head.weight', 'head.bias']:
+                    if k in pretrained_state_dict: #and pretrained_state_dict[k].shape != self.state_dict[k].shape:
+                        print(f"Removing key {k} from pretrained checkpoint")
+                        del pretrained_state_dict[k]
+
             patch_hw = (img_size[1] // 16, img_size[0] // 16) # 16=patchsize
             #patch_hw = (img_size[0] // 16, img_size[1] // 16) 
             pos_embed = get_2d_sincos_pos_embed_flexible(self.pos_embed.size(-1), patch_hw, cls_token=True) # not trained, overwrite from sincos
@@ -1683,10 +1728,17 @@ class VIT_ppnet(L.LightningModule,VisionTransformer):
                     print(f"Removing key {k} from pretrained checkpoint")
                     del pretrained_state_dict[k]
 
-            self.load_state_dict(pretrained_state_dict, strict=False)
+            info = self.load_state_dict(pretrained_state_dict, strict=False)
 
-            trunc_normal_(self.head.weight, std=2e-5)
+            try:
+                trunc_normal_(self.head.weight, std=2e-5)
+            except:
+                print("no head")
 
+            # try: 
+            #     trunc_normal_(self.ppnet.last_layer.weight, std=2e-5)
+            # except:
+            #     print("no prototype vectors")
 
     def calculate_orthogonality_loss(self) -> torch.Tensor:
         """
@@ -1912,11 +1964,11 @@ class VIT_MIM(L.LightningModule):
 
     def NN(self, key, Queue):
         # Nearest Neighbor function to retrieve the positive in the queue
-        key = normalize(key, dim=1)
-        Queue = normalize(Queue, dim=1)
-        similarities = torch.matmul(key, Queue.T)
-        nn_indices = similarities.argmax(dim=1)
-        return Queue[nn_indices]
+        key = F.normalize(key, dim=1)
+        Queue = F.normalize(Queue, dim=1)
+        similarity = torch.mm(key, Queue.t())
+        nearest_neighbors = similarity.max(dim=1)[1]
+        return Queue[nearest_neighbors]
 
     def configure_optimizers(self):
         #heuristic:
@@ -2421,3 +2473,45 @@ def loss_fn(nn, p, temperature=0.1):
     logits /= temperature
     labels = torch.arange(p.size(0), device=p.device)
     return F.cross_entropy(logits, labels)
+
+
+
+
+class AttentivePooling(nn.Module):
+    def __init__(self, embed_dim, num_heads):
+        """
+        Args:
+            embed_dim: Dimension of the patch embeddings.
+            num_heads: Number of attention heads.
+        """
+        super(AttentivePooling, self).__init__()
+        # Using torch's built-in multihead attention
+        self.mha = nn.MultiheadAttention(embed_dim, num_heads, batch_first=True)
+        # Learnable query parameter, shape: (1, 1, embed_dim)
+        # This query will be repeated for each sample in the batch.
+        self.query = nn.Parameter(torch.randn(1, 1, embed_dim))
+        
+    def forward(self, x):
+        """
+        Args:
+            x: Input tensor of shape (B, N, embed_dim) where the first token is the CLS token.
+        Returns:
+            Pooled features of shape (B, embed_dim).
+        """
+        # Exclude the CLS token and work on patch tokens only.
+        x_patch = x[:, 1:, :]  # shape: (B, N-1, embed_dim)
+        B = x_patch.shape[0]
+        
+        # Expand the learnable query for each instance in the batch.
+        # Query shape becomes: (B, 1, embed_dim)
+        query_expanded = self.query.expand(B, -1, -1)
+        
+        # Apply multihead attention:
+        # Query: (B, 1, embed_dim)
+        # Key, Value: (B, N-1, embed_dim)
+        # Output shape: (B, 1, embed_dim)
+        attn_output, attn_weights = self.mha(query_expanded, x_patch, x_patch)
+        
+        # Squeeze the sequence dimension to obtain (B, embed_dim)
+        pooled = attn_output.squeeze(1)
+        return pooled

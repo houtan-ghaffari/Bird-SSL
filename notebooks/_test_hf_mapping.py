@@ -414,3 +414,264 @@ print(f"Dataset size: {dataset_size_gb:.2f} GB")
 from datasets import load_dataset
 
 dataset = load_dataset("DBD-research-group/BirdSet", "XCM", cache_dir="/home/lrauch/projects/birdMAE/data/XCM", num_proc=3)
+
+
+#%%
+
+import numpy as np
+import matplotlib.pyplot as plt
+from scipy.stats import norm
+
+num_layers = 25  # 24 blocks + classification head
+layer_decay = 0.5
+
+def get_layer_scales(num_layers, layer_decay, decay_type="right"):
+    if decay_type == "right":
+        # For layers 0 to num_layers-1, then append classification head scale 1
+        scales = [layer_decay ** (num_layers - i) for i in range(num_layers)]
+        scales.append(1.0)
+    elif decay_type == "normal":
+        # Use a normalized normal (Gaussian) PDF over the layers
+        x = np.linspace(-3, 3, num_layers + 1)
+        pdf_vals = norm.pdf(x)
+        scales = (pdf_vals / np.max(pdf_vals)).tolist()
+    elif decay_type == "inverse_normal":
+        # Create an inverse-normal decay, adjusting the center
+        x = np.linspace(-3, 3, num_layers + 1)
+        pdf_vals = norm.pdf(x)
+        pdf_vals = pdf_vals / np.max(pdf_vals)
+        inverted = 1 - pdf_vals
+        midpoint = len(inverted) // 2  # 26 // 2 = 13
+        # Compute scaling factors for the left part (13 values)
+        position_counts = np.arange(1, num_layers + 1)[::-1]  # shape: (25,)
+        scaling_factors = layer_decay ** position_counts
+        scaled_left = scaling_factors[:midpoint]  # first 13 values
+        # Use the right part from the inverted PDF starting at midpoint (13 values)
+        right = inverted[midpoint:]
+        # Adjust a couple of values for a smoother transition if needed
+        if len(right) >= 2:
+            right[0] += 0.1
+            right[1] += 0.1
+        # Concatenate so that total length is 13 + 13 = 26
+        scales = np.concatenate([scaled_left, right]).tolist()
+    else:
+        raise ValueError("Unknown decay_type: {}".format(decay_type))
+    return scales
+
+# Define the decay types we want to visualize
+decay_types = ["right", "normal", "inverse_normal"]
+
+# Create subplots: one for each decay type
+fig, axs = plt.subplots(1, 3, figsize=(18, 5))
+
+for ax, dt in zip(axs, decay_types):
+    scales = get_layer_scales(num_layers, layer_decay, dt)
+    # Both x and scales have 26 elements now
+    ax.plot(range(num_layers + 1), scales, marker='o')
+    ax.set_title(f"Decay type: {dt}")
+    ax.set_xlabel("Layer Index (0 to 24, classification head at 25)")
+    ax.set_ylabel("Learning Rate Scale")
+    ax.grid(True)
+
+plt.tight_layout()
+plt.show()
+
+#%%
+
+import numpy as np
+import matplotlib.pyplot as plt
+from scipy.stats import norm
+
+num_layers = 25  # 24 blocks + classification head
+layer_decay = 0.75  # baseline scale at the boundaries
+
+def get_layer_scales(num_layers, layer_decay, decay_type="improved_inverse_normal", **kwargs):
+    """
+    Returns a list of learning rate scales for layers 0 to num_layers-1 plus one for the classification head.
+    
+    Available decay types:
+      - "right": Exponential decay: scale_i = layer_decay^(num_layers - i)
+      - "normal": Normal (Gaussian) PDF normalized between 0 and 1.
+      - "inverse_normal": Original inverse-normal decay (less smooth).
+      - "improved_inverse_normal": A smooth bump curve that keeps medium layers nearly unchanged.
+      - "flat_middle": Piecewise decay with a flat region in the middle.
+      - "polynomial": Polynomial decay: 1 - (1 - layer_decay)*((num_layers - i)/num_layers)^p
+    """
+    if decay_type == "right":
+        scales = [layer_decay ** (num_layers - i) for i in range(num_layers)]
+        scales.append(1.0)
+    
+    elif decay_type == "normal":
+        x = np.linspace(-3, 3, num_layers + 1)
+        pdf_vals = norm.pdf(x)
+        scales = (pdf_vals / np.max(pdf_vals)).tolist()
+    
+    elif decay_type == "inverse_normal":
+        # Original (ugly) inverse-normal version for reference
+        x = np.linspace(-3, 3, num_layers + 1)
+        pdf_vals = norm.pdf(x)
+        pdf_vals = pdf_vals / np.max(pdf_vals)
+        inverted = 1 - pdf_vals
+        midpoint = len(inverted) // 2
+        position_counts = np.arange(1, num_layers + 1)[::-1]
+        scaling_factors = layer_decay ** position_counts
+        scaled_left = scaling_factors[:midpoint]
+        right = inverted[midpoint:]
+        if len(right) >= 2:
+            right[0] += 0.1
+            right[1] += 0.1
+        scales = np.concatenate([scaled_left, right]).tolist()
+    
+    elif decay_type == "improved_inverse_normal":
+        # Improved version: create a smooth Gaussian bump centered in the middle.
+        # Parameter sigma controls the width of the bump (default 0.3)
+        sigma = kwargs.get("sigma", 0.3)
+        # Create a normalized index x in [0,1] for layers (excluding the classification head)
+        x = np.linspace(0, 1, num_layers)
+        # Gaussian bump centered at 0.5, so that the middle layers get a scale of 1.
+        bump = np.exp(-((x - 0.5) ** 2) / (2 * sigma ** 2))
+        bump = bump / np.max(bump)  # now max is 1
+        # Interpolate between layer_decay (at boundaries) and 1 (at the center)
+        scales = layer_decay + (1 - layer_decay) * bump
+        scales = scales.tolist()
+        scales.append(1.0)
+    
+    elif decay_type == "flat_middle":
+        flat_width = kwargs.get("flat_width", 4)
+        L = num_layers  # excluding classification head
+        mid = L // 2
+        scales = []
+        for i in range(L):
+            if i < mid - flat_width // 2:
+                scale = layer_decay ** (mid - i)
+            elif i > mid + flat_width // 2:
+                scale = layer_decay ** (i - mid)
+            else:
+                scale = 1.0
+            scales.append(scale)
+        scales.append(1.0)
+    
+    elif decay_type == "polynomial":
+        power = kwargs.get("power", 2)
+        scales = [1 - (1 - layer_decay) * ((num_layers - i) / num_layers) ** power for i in range(num_layers)]
+        scales.append(1.0)
+    
+    else:
+        raise ValueError("Unknown decay_type: {}".format(decay_type))
+    
+    return scales
+
+# Define decay types to visualize
+decay_configs = {
+    "right": {},
+    "normal": {},
+    "inverse_normal": {},
+    "improved_inverse_normal": {"sigma": 0.3},
+    "flat_middle": {"flat_width": 4},
+    "polynomial": {"power": 2},
+}
+
+# Plot all decay curves for comparison
+num_configs = len(decay_configs)
+fig, axs = plt.subplots(2, 3, figsize=(18, 10), sharey=True)
+axs = axs.flatten()
+
+for ax, (dt, params) in zip(axs, decay_configs.items()):
+    scales = get_layer_scales(num_layers, layer_decay, dt, **params)
+    ax.plot(range(num_layers + 1), scales, marker='o')
+    ax.set_title(f"Decay: {dt}")
+    ax.set_xlabel("Layer Index (0 to 24, classification head at 25)")
+    ax.grid(True)
+    
+axs[0].set_ylabel("Learning Rate Scale")
+plt.tight_layout()
+plt.show()
+
+#%%
+
+import numpy as np
+import matplotlib.pyplot as plt
+
+num_layers = 25  # 24 blocks + classification head
+layer_decay = 0.75
+
+def get_layer_scales(num_layers, layer_decay, decay_type="right_modified", **kwargs):
+    if decay_type == "right_modified":
+        # Use a nonlinear mapping for the exponent.
+        # beta < 1 will push the medium layers to have an even lower scale.
+        beta = kwargs.get("beta", 0.9)
+        scales = []
+        # i from 0 to num_layers-1 for the blocks
+        for i in range(num_layers):
+            # Normalize layer index: x goes from 1 (earliest) to 0 (last block)
+            x = 1 - (i / (num_layers - 1))
+            # Instead of linear (num_layers - i), use a nonlinear mapping:
+            exponent = 1 + (num_layers - 1) * (x ** beta)
+            scale = layer_decay ** exponent
+            scales.append(scale)
+        scales.append(1.0)  # classification head fixed at 1
+        return scales
+    else:
+        raise ValueError("Unknown decay_type: {}".format(decay_type))
+
+# For comparison, here's the original right decay for reference:
+def get_layer_scales_original(num_layers, layer_decay):
+    scales = [0.3 ** (num_layers - i) for i in range(num_layers)]
+    scales.append(1.0)
+    return scales
+
+# Plotting the two variants:
+scales_modified = get_layer_scales(num_layers, layer_decay, decay_type="right_modified", beta=0.4)
+scales_original = get_layer_scales_original(num_layers, layer_decay)
+
+plt.figure(figsize=(8,5))
+plt.plot(range(num_layers + 1), scales_original, marker='o', label="Original right decay")
+plt.plot(range(num_layers + 1), scales_modified, marker='o', label="Modified right (β=0.5)")
+plt.xlabel("Layer Index (0 to 24, classification head at 25)")
+plt.ylabel("Learning Rate Scale")
+plt.title("Comparison of Original and Modified 'Right' Decay")
+plt.legend()
+plt.grid(True)
+plt.show()
+#%%
+
+print(scales_modified)
+
+#%%
+
+import matplotlib.pyplot as plt
+
+num_layers = 25
+layer_decay = 0.9
+
+# Right Decay: higher rates at later layers.
+scales_right = [layer_decay ** (num_layers - i) for i in range(num_layers)]
+scales_right.append(1.0)
+
+# Left Decay: higher rates at earlier layers.
+scales_left = [layer_decay ** i for i in range(num_layers)]
+scales_left.append(1.0)
+
+# Middle Decay: highest rate in the middle, lower toward both ends.
+center = num_layers / 2
+scales_middle = [layer_decay ** abs(i - center) for i in range(num_layers)]
+scales_middle.append(1.0)
+
+# # Left-Middle Decay (version 2): a blend of left and middle biases.
+# alpha, beta = 0.5, 0.5
+# scales_left_middle = [layer_decay ** (alpha * i + beta * abs(i - center)) for i in range(num_layers)]
+# scales_left_middle.append(1.0)
+
+# Plotting: note that we have num_layers + 1 points due to the appended 1.0.
+layers = list(range(num_layers + 1))
+plt.figure(figsize=(10, 6))
+plt.plot(layers, scales_right, marker='o', label="Right Decay")
+plt.plot(layers, scales_left, marker='o', label="Left Decay")
+plt.plot(layers, scales_middle, marker='o', label="Middle Decay")
+#plt.plot(layers, scales_left_middle, marker='o', label="Left-Middle Decay")
+plt.xlabel("Layer Index")
+plt.ylabel("Learning Rate Scale")
+plt.title("Layer-wise Learning Rate Decay Schedules (25 Blocks)")
+plt.legend()
+plt.grid(True)
+plt.show()

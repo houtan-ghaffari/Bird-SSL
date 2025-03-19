@@ -24,7 +24,7 @@ train: true
 test: true
 
 logger:
-  experiment_name: overnight_hsn_ppnet
+  experiment_name: ablate_hsn
 
 data:
   loaders:
@@ -60,9 +60,12 @@ module:
       #layer_decay: 0.75
       layer_decay: 0.75
       #decay_type: inverse_normal
-      decay_type: inverse_normal
+      decay_type: right
       
   network:
     ema_update_rate: null
     name: VIT_ppnet
+    freeze_backbone: False
+    ppnet:
+      num_prototypes: 420
       

@@ -316,7 +316,11 @@ class BirdSetDataModule(HFDataModule):
 
                 if self.hf_name != "XCM" and self.hf_name != "XCL":
                     print("no val in xc")
-                    self.val_data = load_from_disk(f"{self.save_to_disk}/valid")
+                    try: 
+                        self.val_data = load_from_disk(f"{self.save_to_disk}/valid")
+                    except: 
+                        print("no valid in data dir")
+                        self.val_data = None
             
                 self.train_data.set_format("numpy", columns=self.columns, output_all_columns=False)
                 #self.train_data = self.train_data.cast_column("audio", Audio(sampling_rate=self.sampling_rate, mono=True, decode=True))

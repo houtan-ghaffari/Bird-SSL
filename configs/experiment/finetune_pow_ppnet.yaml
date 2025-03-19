@@ -49,7 +49,7 @@ module:
   optimizer:
     target:
       #lr: 5e-5
-      lr: 4e-4
+      lr: 3e-4
       #lr: 5e-4
       #lr: 1e-4
       #weight_decay: 3e-2
@@ -59,11 +59,12 @@ module:
       #layer_decay: 0.75
       layer_decay: 0.75
       #decay_type: inverse_normal
-      decay_type: inverse_normal
+      decay_type: right
       
   network:
     ema_update_rate: null
     name: VIT_ppnet
+    freeze_backbone: false
     ppnet:
       num_prototypes: 960
 
