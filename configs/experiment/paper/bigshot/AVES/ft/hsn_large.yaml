@@ -1,9 +1,9 @@
 # @package _global_
 defaults:
-  - override /callbacks: default
+  - override /callbacks: default_ssl
   - override /data/dataset: HSN
   - override /data/loaders: audioset_balanced
-  - override /data/transform: audio_birdset
+  - override /data/transform: audio_birdset # für waveforms, similar to melbank_birdset
   - override /logger: mlflow
   - override /module/network: birdAVES
   - override /module/optimizer: adamw
@@ -15,44 +15,46 @@ defaults:
 
 seed: 42
 start_time: ${now:%Y-%m-%d_%H%M%S}
-task_name: BirdAVES-head
+task_name: birdaves
 
 train: true
 test: true
 
 logger:
-  experiment_name: BirdAVES-large-hsn
+  experiment_name: full_hsn
+  run_name: birdAVES_hsn_allshot_${seed}_${start_time}
 
 data:
   dataset:
     target_length: 80_000
+    save_to_disk: /scratch/birdset/HSN/HSN_processed_42_af8bbf517e45e99d_d9dd5751bb728754_c3aa30664ea8e4a0
   loaders:
     train:
       num_workers: 24
       batch_size: 64
-      #batch_size: 20
       shuffle: true
       drop_last: true
-
+      
 
 trainer:
   max_epochs: 30
   limit_val_batches: 1.0
   check_val_every_n_epoch: 1
-  gradient_clip_val: 2 # 0.5
-  precision: bf16
+  gradient_clip_val: 0.5
+  precision: 16-mixed
   num_sanity_val_steps: 0
 
 
 module:
   network:
+    name: BirdAVES-large
     freeze_backbone: false
 
   optimizer:
     target:
-      lr: 4e-4
-      weight_decay: 3e-4
+      lr: 1e-5
+      weight_decay: 1e-4
 
     extras:
       layer_decay: 0.75
-      decay_type: inverse_normal
+      decay_type: right
