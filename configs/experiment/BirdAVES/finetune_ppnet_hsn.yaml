@@ -5,7 +5,7 @@ defaults:
   - override /data/loaders: audioset_balanced
   - override /data/transform: audio_birdset
   - override /logger: mlflow
-  - override /module/network: protoCLR
+  - override /module/network: birdAVES
   - override /module/optimizer: adamw
   - override /module/scheduler: cosine
   - override /module/loss: binary_cross_entropy
@@ -15,41 +15,46 @@ defaults:
 
 seed: 42
 start_time: ${now:%Y-%m-%d_%H%M%S}
-task_name: ProtoCLR-finetune
+task_name: BirdAVES-ppnet
 
 train: true
 test: true
 
 logger:
-  experiment_name: protoCLR-hsn
+  experiment_name: BirdAVES-large-hsn
 
 data:
   dataset:
-    target_length: 96_000 # 5 seconds
+    target_length: 80_000
   loaders:
     train:
-      num_workers: 14
+      num_workers: 24
       batch_size: 64
-      #batch_size: 20
       shuffle: true
       drop_last: true
 
+
 trainer:
-  max_epochs: 15
+  max_epochs: 30
   limit_val_batches: 1.0
   check_val_every_n_epoch: 1
-  #gradient_clip_val: 0.1
-  gradient_clip_val: 0.1
+  gradient_clip_val: 1
   precision: bf16
   num_sanity_val_steps: 0
 
+
 module:
   network:
+    name: BirdAVES-large-ppnet
     freeze_backbone: false
+    ppnet:
+      num_prototypes: 20
+      focal_similarity: false
   optimizer:
     target:
-      lr: 4e-4
-      weight_decay: 3e-4
-#    extras:
-#      layer_decay: 0.75
-#      decay_type: inverse_normal
+      lr: 1e-5
+      weight_decay: 1e-4
+
+    extras:
+      layer_decay: 0.75
+      decay_type: inverse_normal

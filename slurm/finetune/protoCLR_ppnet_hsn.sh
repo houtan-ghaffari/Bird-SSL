@@ -22,5 +22,5 @@ export CUDA_LAUNCH_BLOCKING=1
 export HYDRA_FULL_ERROR=1
 
 srun python finetune.py \
-        experiment=protoCLR/finetune_hsn.yaml
+        experiment=protoCLR/finetune_ppnet_hsn.yaml
 

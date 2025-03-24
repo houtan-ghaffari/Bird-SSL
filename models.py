@@ -1421,7 +1421,7 @@ class VIT_ppnet(L.LightningModule,VisionTransformer):
         targets = batch["label"]
         logits = self(audio)
         targets = targets.long()
-        preds = logits.sigmoid()
+        #preds = logits.sigmoid()
         bce_loss = self.loss(logits, targets.float())
         orthogonality_loss = self.calculate_orthogonality_loss()
 
@@ -2096,7 +2096,6 @@ class VIT_MIM(L.LightningModule):
 
 #### BirdAVES, download cfg and weights from : https://github.com/earthspecies/aves (table in the bottom)
 from torchaudio.models import wav2vec2_model
-import json
 
 class BirdAVES(L.LightningModule, nn.Module):
 
@@ -2112,14 +2111,13 @@ class BirdAVES(L.LightningModule, nn.Module):
 
         L.LightningModule.__init__(self)
 
-        #birdaves_cfg = self.load_config(birdaves_cfg_path)
         birdaves_cfg = birdaves_cfg_path
         self.encoder = wav2vec2_model(**birdaves_cfg, aux_num_out=None)
         self.encoder.load_state_dict(torch.load(birdaves_weights_path))
-        self.encoder.feature_extractor.requires_grad_(False)
+        self.encoder.feature_extractor.requires_grad_(False) # feature extractor should never be retrained
 
-        feature_dim = 768 if 'base' in birdaves_weights_path else 1024
-        self.classifier = nn.Linear(feature_dim, num_classes)
+        self.embed_dim = 768 if 'base' in birdaves_weights_path else 1024
+        self.head = nn.Linear(self.embed_dim, num_classes)
 
         self.save_hyperparameters()
 
@@ -2150,14 +2148,9 @@ class BirdAVES(L.LightningModule, nn.Module):
         self.test_predictions = []
         self.test_targets = []
 
-    def load_config(self, config_path):
-        with open(config_path, 'r') as ff:
-            obj = json.load(ff)
-        return obj
-
     def forward(self, x):
         features = self.encoder.extract_features(x.squeeze())[0][-1]
-        pred = self.classifier(features.mean(dim=1))
+        pred = self.head(features.mean(dim=1))
         return pred
 
     def training_step(self, batch, batch_idx):
@@ -2184,8 +2177,6 @@ class BirdAVES(L.LightningModule, nn.Module):
         except:
             loss = self.loss(pred, targets.float())
 
-        #metric = self.val_metric(pred, targets)
-        #pred = torch.softmax(pred, dim=1)
         self.val_predictions.append(pred.detach().cpu())
         self.val_targets.append(targets.detach().cpu())
 
@@ -2196,12 +2187,12 @@ class BirdAVES(L.LightningModule, nn.Module):
         preds = torch.cat(self.val_predictions)
         targets = torch.cat(self.val_targets)
         metric = self.val_metric(preds, targets)
-        self.log(f'val_{self.val_metric.__class__.__name__}', metric, on_step=False, on_epoch=True, prog_bar=True)
+        self.log(f'val_{self.val_metric.__class__.__name__}', metric, on_step=False, on_epoch=True, prog_bar=False)
         print("val metric:", metric.detach().cpu().item())
 
         self.val_add_metrics(preds, targets)
         for name, metric in self.val_add_metrics.items():
-            self.log(f'valid_{name}', metric, on_epoch=True, prog_bar=True)
+            self.log(f'valid_{name}', metric, on_epoch=True, prog_bar=False)
 
         self.val_predictions = []
         self.val_targets = []
@@ -2221,7 +2212,7 @@ class BirdAVES(L.LightningModule, nn.Module):
         self.test_predictions.append(pred.detach().cpu())
         self.test_targets.append(targets.detach().cpu())
 
-        self.log('test_loss', loss, on_step=False, on_epoch=True, prog_bar=True)
+        self.log('test_loss', loss, on_step=False, on_epoch=True, prog_bar=False)
 
     def on_test_epoch_end(self):
         preds = torch.cat(self.test_predictions)
@@ -2231,19 +2222,16 @@ class BirdAVES(L.LightningModule, nn.Module):
 
         self.test_add_metrics(preds, targets)
         for name, metric in self.test_add_metrics.items():
-            self.log(f'test_{name}', metric, on_epoch=True, prog_bar=True)
+            self.log(f'test_{name}', metric, on_epoch=True, prog_bar=False)
 
     def configure_optimizers(self):
-        #heuristic:
-        # eff_batch_size = self.trainer.accumulate_grad_batches * self.trainer.num_devices * self.train_batch_size
-        # self.optimizer_cfg["lr"] = self.optimizer_cfg["lr"] * eff_batch_size / 48
-        # print("effective learning rate:", self.optimizer_cfg["lr"], self.layer_decay)
+        params = []
+        params += list(self.head.parameters())
+        params += list(self.encoder.parameters())
 
         self.optimizer = hydra.utils.instantiate(
             self.optimizer_cfg,
-            params=self.classifier.parameters())
-        # print("LAMB")
-        # self.optimizer = LAMB(self.parameters(), lr=3e-4)
+            params=params)
 
         if self.scheduler_cfg:
             num_training_steps = self.trainer.estimated_stepping_batches
@@ -2267,16 +2255,108 @@ class BirdAVES(L.LightningModule, nn.Module):
 
         return {"optimizer": self.optimizer}
 
+class BirdAVES_ppnet(BirdAVES):
+    def __init__(self, ppnet_cfg, *args, **kwargs, ):
+        super().__init__(*args, **kwargs)
+
+        self.ppnet_cfg = ppnet_cfg
+
+        self.ppnet = PPNet(
+            num_prototypes=ppnet_cfg.num_prototypes,
+            channels_prototypes=ppnet_cfg.channels_prototypes,
+            h_prototypes=ppnet_cfg.h_prototypes,
+            w_prototypes=ppnet_cfg.w_prototypes,
+            num_classes=ppnet_cfg.num_classes,
+            topk_k=ppnet_cfg.topk_k,
+            margin=ppnet_cfg.margin,
+            init_weights=ppnet_cfg.init_weights,
+            add_on_layers_type=ppnet_cfg.add_on_layers_type,
+            incorrect_class_connection=ppnet_cfg.incorrect_class_connection,
+            correct_class_connection=ppnet_cfg.correct_class_connection,
+            bias_last_layer=ppnet_cfg.bias_last_layer,
+            non_negative_last_layer=ppnet_cfg.non_negative_last_layer,
+            embedded_spectrogram_height=ppnet_cfg.embedded_spectrogram_height,
+        )
+
+    def forward(self, x):
+        features = self.encoder.extract_features(x.squeeze())[0][-1] # 64, 249, 1024 # batch, token, embed
+        if self.ppnet_cfg.focal_similarity == True:
+            x_pooled = features.mean(dim=1) # 64, 1024 # batch, embed
+            z_f = features - x_pooled.unsqueeze(1) # 64, 249, 1024 # batch, token, embed
+
+            features = z_f.permute(0, 2, 1).unsqueeze(2) # 64, 1024, 249 -> batch, embed, 1, token
+        else:
+            features = features.permute(0, 2, 1).unsqueeze(2) #
+        logits, _ = self.ppnet(features)
+
+        return logits
+
+    def configure_optimizers(self):
+        optimizer_specifications = []
+
+        # 1) Add the add_on_layers group
+        addon_params = list(self.ppnet.add_on_layers.parameters())
+        optimizer_specifications.append({
+            "params": addon_params,
+            "lr": 3e-2,
+            "weight_decay": 1e-4,
+        })
+
+        # 2) Add the prototype_vectors group
+        #    (assuming this is either a list of Tensors or just one Tensor)
+        proto_params = [self.ppnet.prototype_vectors]  # or list(...)
+        optimizer_specifications.append({
+            "params": proto_params,
+            "lr": self.ppnet_cfg.prototype_lr,
+        })
+
+        # 3) Add the last_layer group
+        last_params = list(self.ppnet.last_layer.parameters())
+        optimizer_specifications.append({
+            "params": last_params,
+            "lr": self.ppnet_cfg.last_layer_lr,
+            "weight_decay": 1e-4,
+        })
+
+        # 4) If there are truly "rest" parameters:
+        all_params = set(self.parameters())
+        already_in_groups = set(addon_params + proto_params + last_params)
+        rest = [p for p in all_params if p not in already_in_groups]
+        if len(rest) > 0:
+            optimizer_specifications.append({"params": rest})
+
+        # 5) Instantiate via Hydra
+        self.optimizer = hydra.utils.instantiate(
+            self.optimizer_cfg,
+            optimizer_specifications
+        )
+
+        if self.scheduler_cfg:
+            num_training_steps = self.trainer.estimated_stepping_batches
+            warmup_ratio = 0.067 # hard coded
+            num_warmup_steps = num_training_steps * warmup_ratio
+
+            scheduler = CosineWarmupScheduler(
+                optimizer=self.optimizer,
+                warmup_steps=num_warmup_steps,
+                total_steps=num_training_steps
+            )
+
+            scheduler_dict = {
+                "scheduler": scheduler,
+                "interval": "step",  # Update at every step
+                "frequency": 1,
+                "name": "lr_cosine"
+            }
+
+            return {"optimizer": self.optimizer, "lr_scheduler": scheduler_dict}
+
+        return {"optimizer": self.optimizer}
 
 #### SimCLR
-#git clone https://huggingface.co/ilyassmoummad/ProtoCLR
-#pip install yacs
-#pip install torchinfo
-# import sys
-# sys.path.append('ProtoCLR') #path to https://huggingface.co/ilyassmoummad/ProtoCLR
+#from https://huggingface.co/ilyassmoummad/ProtoCLR
 from ProtoCLR.cvt import ConvolutionalVisionTransformer
 from ProtoCLR.melspectrogram import MelSpectrogramProcessor
-from einops import rearrange
 
 class SimCLR(L.LightningModule, nn.Module):
 
@@ -2292,16 +2372,13 @@ class SimCLR(L.LightningModule, nn.Module):
 
         L.LightningModule.__init__(self)
         self.cuda()
-        self.preprocessor = MelSpectrogramProcessor(device=self.device) # to be configured
-        #self.encoder = self.cvt13()
+        self.preprocessor = MelSpectrogramProcessor(device=self.device)
         self.encoder = ConvolutionalVisionTransformer(spec=model_spec_cfg)
         self.encoder.load_state_dict(torch.load(proto_clr_weights_path, map_location="cpu"))
         self.encoder.cuda()
-        for p in self.encoder.parameters():
-            p.requires_grad = False
 
-        feature_dim = 384
-        self.classifier = nn.Linear(feature_dim, num_classes)
+        self.embed_dim = 384
+        self.head = nn.Linear(self.embed_dim, num_classes)
 
         self.save_hyperparameters()
 
@@ -2333,10 +2410,10 @@ class SimCLR(L.LightningModule, nn.Module):
         self.test_targets = []
 
     def forward(self, x):
-        x = self.preprocessor.process(x)
         x = x.unsqueeze(1)
+        x = self.preprocessor.process(x)
         features = self.encoder(x)
-        pred = self.classifier(features)
+        pred = self.head(features)
         return pred
 
     def training_step(self, batch, batch_idx):
@@ -2363,8 +2440,6 @@ class SimCLR(L.LightningModule, nn.Module):
         except:
             loss = self.loss(pred, targets.float())
 
-        #metric = self.val_metric(pred, targets)
-        #pred = torch.softmax(pred, dim=1)
         self.val_predictions.append(pred.detach().cpu())
         self.val_targets.append(targets.detach().cpu())
 
@@ -2375,12 +2450,12 @@ class SimCLR(L.LightningModule, nn.Module):
         preds = torch.cat(self.val_predictions)
         targets = torch.cat(self.val_targets)
         metric = self.val_metric(preds, targets)
-        self.log(f'val_{self.val_metric.__class__.__name__}', metric, on_step=False, on_epoch=True, prog_bar=True)
+        self.log(f'val_{self.val_metric.__class__.__name__}', metric, on_step=False, on_epoch=True, prog_bar=False)
         print("val metric:", metric.detach().cpu().item())
 
         self.val_add_metrics(preds, targets)
         for name, metric in self.val_add_metrics.items():
-            self.log(f'valid_{name}', metric, on_epoch=True, prog_bar=True)
+            self.log(f'valid_{name}', metric, on_epoch=True, prog_bar=False)
 
         self.val_predictions = []
         self.val_targets = []
@@ -2400,7 +2475,7 @@ class SimCLR(L.LightningModule, nn.Module):
         self.test_predictions.append(pred.detach().cpu())
         self.test_targets.append(targets.detach().cpu())
 
-        self.log('test_loss', loss, on_step=False, on_epoch=True, prog_bar=True)
+        self.log('test_loss', loss, on_step=False, on_epoch=True, prog_bar=False)
 
     def on_test_epoch_end(self):
         preds = torch.cat(self.test_predictions)
@@ -2410,19 +2485,16 @@ class SimCLR(L.LightningModule, nn.Module):
 
         self.test_add_metrics(preds, targets)
         for name, metric in self.test_add_metrics.items():
-            self.log(f'test_{name}', metric, on_epoch=True, prog_bar=True)
+            self.log(f'test_{name}', metric, on_epoch=True, prog_bar=False)
 
     def configure_optimizers(self):
-        #heuristic:
-        # eff_batch_size = self.trainer.accumulate_grad_batches * self.trainer.num_devices * self.train_batch_size
-        # self.optimizer_cfg["lr"] = self.optimizer_cfg["lr"] * eff_batch_size / 48
-        # print("effective learning rate:", self.optimizer_cfg["lr"], self.layer_decay)
+        params = []
+        params += list(self.encoder.parameters())
+        params += list(self.head.parameters())
 
         self.optimizer = hydra.utils.instantiate(
             self.optimizer_cfg,
-            params=self.classifier.parameters())
-        # print("LAMB")
-        # self.optimizer = LAMB(self.parameters(), lr=3e-4)
+            params=params)
 
         if self.scheduler_cfg:
             num_training_steps = self.trainer.estimated_stepping_batches
@@ -2447,6 +2519,123 @@ class SimCLR(L.LightningModule, nn.Module):
         return {"optimizer": self.optimizer}
 
 
+class SimCLR_ppnet(SimCLR):
+    def __init__(self, ppnet_cfg, *args, **kwargs, ):
+        super().__init__(*args, **kwargs)
+
+        self.ppnet_cfg = ppnet_cfg
+
+        self.ppnet = PPNet(
+            num_prototypes=ppnet_cfg.num_prototypes,
+            channels_prototypes=ppnet_cfg.channels_prototypes,
+            h_prototypes=ppnet_cfg.h_prototypes,
+            w_prototypes=ppnet_cfg.w_prototypes,
+            num_classes=ppnet_cfg.num_classes,
+            topk_k=ppnet_cfg.topk_k,
+            margin=ppnet_cfg.margin,
+            init_weights=ppnet_cfg.init_weights,
+            add_on_layers_type=ppnet_cfg.add_on_layers_type,
+            incorrect_class_connection=ppnet_cfg.incorrect_class_connection,
+            correct_class_connection=ppnet_cfg.correct_class_connection,
+            bias_last_layer=ppnet_cfg.bias_last_layer,
+            non_negative_last_layer=ppnet_cfg.non_negative_last_layer,
+            embedded_spectrogram_height=ppnet_cfg.embedded_spectrogram_height,
+        )
+
+    def forward(self, x):
+        B = x.size(0)
+        x = x.unsqueeze(1)
+        x = self.preprocessor.process(x)
+
+        for i in range(self.encoder.num_stages):
+            x, cls_token = getattr(self.encoder, f'stage{i}')(x)
+
+        if self.ppnet_cfg.focal_similarity == True:
+            x_cls = x[:, 0, :]
+            x_patch = x[:, 1:, :]
+            x = x_patch - x_cls.unsqueeze(1)
+        else:
+            x = x[:, 1:, :]
+
+        logits, _ = self.ppnet(x)
+
+        return logits
+
+    # from bird aves
+    # def forward(self, x):
+    #     features = self.encoder.extract_features(x.squeeze())[0][-1] # 64, 249, 1024 # batch, token, embed
+    #     if self.ppnet_cfg.focal_similarity == True:
+    #         x_pooled = features.mean(dim=1) # 64, 1024 # batch, embed
+    #         z_f = features - x_pooled.unsqueeze(1) # 64, 249, 1024 # batch, token, embed
+    #
+    #         features = z_f.permute(0, 2, 1).unsqueeze(2) # 64, 1024, 249 # batch, embed, 1, token
+    #     else:
+    #         features = features.permute(0, 2, 1).unsqueeze(2) #
+    #     logits, _ = self.ppnet(features)
+    #
+    #     return logits
+
+    def configure_optimizers(self):
+        optimizer_specifications = []
+
+        # 1) Add the add_on_layers group
+        addon_params = list(self.ppnet.add_on_layers.parameters())
+        optimizer_specifications.append({
+            "params": addon_params,
+            "lr": 3e-2,
+            "weight_decay": 1e-4,
+        })
+
+        # 2) Add the prototype_vectors group
+        #    (assuming this is either a list of Tensors or just one Tensor)
+        proto_params = [self.ppnet.prototype_vectors]  # or list(...)
+        optimizer_specifications.append({
+            "params": proto_params,
+            "lr": self.ppnet_cfg.prototype_lr,
+        })
+
+        # 3) Add the last_layer group
+        last_params = list(self.ppnet.last_layer.parameters())
+        optimizer_specifications.append({
+            "params": last_params,
+            "lr": self.ppnet_cfg.last_layer_lr,
+            "weight_decay": 1e-4,
+        })
+
+        # 4) If there are truly "rest" parameters:
+        all_params = set(self.parameters())
+        already_in_groups = set(addon_params + proto_params + last_params)
+        rest = [p for p in all_params if p not in already_in_groups]
+        if len(rest) > 0:
+            optimizer_specifications.append({"params": rest})
+
+        # 5) Instantiate via Hydra
+        self.optimizer = hydra.utils.instantiate(
+            self.optimizer_cfg,
+            optimizer_specifications
+        )
+
+        if self.scheduler_cfg:
+            num_training_steps = self.trainer.estimated_stepping_batches
+            warmup_ratio = 0.067  # hard coded
+            num_warmup_steps = num_training_steps * warmup_ratio
+
+            scheduler = CosineWarmupScheduler(
+                optimizer=self.optimizer,
+                warmup_steps=num_warmup_steps,
+                total_steps=num_training_steps
+            )
+
+            scheduler_dict = {
+                "scheduler": scheduler,
+                "interval": "step",  # Update at every step
+                "frequency": 1,
+                "name": "lr_cosine"
+            }
+
+            return {"optimizer": self.optimizer, "lr_scheduler": scheduler_dict}
+
+        return {"optimizer": self.optimizer}
 
 
 class Predictor(nn.Module):

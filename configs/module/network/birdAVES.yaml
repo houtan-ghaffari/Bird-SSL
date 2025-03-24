@@ -2,6 +2,27 @@ name: BirdAVES-large
 num_classes: ${data.dataset.num_classes}
 birdaves_weights_path: /mnt/work/bird2vec/data/ckpt/birdaves-bioxn-large.torchaudio.pt
 sampling_rate: 16_000
+freeze_backbone: false
+
+ppnet:
+  num_prototypes: 315
+  channels_prototypes: 1024
+  h_prototypes: 1
+  w_prototypes: 1
+  num_classes: ${data.dataset.num_classes}
+  topk_k: 1
+  margin: null
+  init_weights: true
+  add_on_layers_type: upsample
+  incorrect_class_connection: null
+  correct_class_connection: 1.0
+  bias_last_layer: -2.0
+  non_negative_last_layer: true
+  embedded_spectrogram_height: null
+  last_layer_lr: 4e-4
+  prototype_lr: 0.04
+  focal_similarity: false # true seems to be not working
+
 birdaves_cfg:
   extractor_mode: group_norm
   extractor_conv_layer_config:
