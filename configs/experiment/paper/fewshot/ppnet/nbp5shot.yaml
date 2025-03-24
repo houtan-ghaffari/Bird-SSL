@@ -10,7 +10,7 @@ defaults:
   - override /module/scheduler: cosine
   - override /module/loss: asymmetric_loss.yaml
   - override /module/metric: birdset_collection
-  - override /paths: workstation
+  - override /paths: cluster
   - override /trainer: single_gpu
 
 start_time: ${now:%Y-%m-%d_%H%M%S}
@@ -27,13 +27,13 @@ data:
       shuffle: true
       drop_last: true
   dataset:
-   save_to_disk: /home/lrauch/projects/birdMAE/data/NBP/NBP_5shot_1
+   save_to_disk: /scratch/birdset/NBP/NBP_5shot_3
 
 seed: 1
 
 logger:
   experiment_name: fewshot_nbp
-  run_name: 5shot_1_ppnet_nbp_${seed}_${start_time}
+  run_name: 5shot_3_ppnet_nbp_${seed}_${start_time}
 
     
 trainer:
