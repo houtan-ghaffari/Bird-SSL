@@ -2543,7 +2543,6 @@ class SimCLR_ppnet(SimCLR):
         )
 
     def forward(self, x):
-        B = x.size(0)
         x = x.unsqueeze(1)
         x = self.preprocessor.process(x)
 
@@ -2551,29 +2550,15 @@ class SimCLR_ppnet(SimCLR):
             x, cls_token = getattr(self.encoder, f'stage{i}')(x)
 
         if self.ppnet_cfg.focal_similarity == True:
-            x_cls = x[:, 0, :]
-            x_patch = x[:, 1:, :]
-            x = x_patch - x_cls.unsqueeze(1)
+            x_cls = cls_token.squeeze().unsqueeze(-1).unsqueeze(-1) # [64, 384, 1, 1]
+            x_patch = x # [64, 384, 8, 19]
+            x = x_patch - x_cls
         else:
-            x = x[:, 1:, :]
+            x = x
 
         logits, _ = self.ppnet(x)
 
         return logits
-
-    # from bird aves
-    # def forward(self, x):
-    #     features = self.encoder.extract_features(x.squeeze())[0][-1] # 64, 249, 1024 # batch, token, embed
-    #     if self.ppnet_cfg.focal_similarity == True:
-    #         x_pooled = features.mean(dim=1) # 64, 1024 # batch, embed
-    #         z_f = features - x_pooled.unsqueeze(1) # 64, 249, 1024 # batch, token, embed
-    #
-    #         features = z_f.permute(0, 2, 1).unsqueeze(2) # 64, 1024, 249 # batch, embed, 1, token
-    #     else:
-    #         features = features.permute(0, 2, 1).unsqueeze(2) #
-    #     logits, _ = self.ppnet(features)
-    #
-    #     return logits
 
     def configure_optimizers(self):
         optimizer_specifications = []

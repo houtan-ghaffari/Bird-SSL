@@ -5,8 +5,8 @@ sampling_rate: 16_000
 freeze_backbone: false
 
 ppnet:
-  num_prototypes: 315
-  channels_prototypes: 1024
+  num_prototypes: 20
+  channels_prototypes: 384
   h_prototypes: 1
   w_prototypes: 1
   num_classes: ${data.dataset.num_classes}
@@ -21,7 +21,7 @@ ppnet:
   embedded_spectrogram_height: null
   last_layer_lr: 4e-4
   prototype_lr: 0.04
-  focal_similarity: false # true seems to be not working
+  focal_similarity: true
 
 model_spec_cfg:
   INIT: trunc_norm
