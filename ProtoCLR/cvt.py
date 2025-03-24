@@ -635,7 +635,6 @@ class ConvolutionalVisionTransformer(nn.Module):
 
         if self.cls_token:
             x = self.norm(cls_tokens)
-            # x = cls_tokens
             x = torch.squeeze(x)
         else:
             x = rearrange(x, 'b c h w -> b (h w) c')
