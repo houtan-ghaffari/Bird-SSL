@@ -8,4 +8,3 @@ log_dir: /mnt/work/bird2vec/logs_pretrain_audioset_MAE/
 model_dir: ${paths.log_dir}/model_checkpoints/
 background_dir: /scratch/birdset/background/wav/
 
-

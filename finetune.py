@@ -34,6 +34,7 @@ def finetune(cfg: DictConfig):
     log.info(f"Seed everything with {cfg.seed}")
     L.seed_everything(cfg.seed)
     #torch.set_num_threads(12)
+    #print(OmegaConf.to_yaml(cfg))
     
     if "birdset" in cfg.data.dataset.hf_path.lower(): # correct this later 
         datamodule = BirdSetDataModule(
@@ -78,12 +79,12 @@ def finetune(cfg: DictConfig):
              for name, param in model.named_parameters():
                 if 'classifier' not in name:
                     param.requires_grad = False
-        elif cfg.module.network.name == "VIT_ppnet":
+        elif cfg.module.network.name == "VIT_ppnet" or cfg.module.network.name.endswith("ppnet"):
             for name, param in model.named_parameters():
                 if 'ppnet' not in name:
                     param.requires_grad = False
         else:
-            if cfg.module.network.global_pool == "attentive":
+            if cfg.module.network.get("global_pool", "") == "attentive":
                 for name, param in model.named_parameters():
                     if 'head' not in name and 'attentive_probe' not in name:
                         param.requires_grad = False
@@ -91,7 +92,7 @@ def finetune(cfg: DictConfig):
                 for name, param in model.named_parameters():
                     if 'head' not in name:
                         param.requires_grad = False
-            
+
         
         if cfg.module.network.get("head", None) == "MLP":
             in_features = model.head.in_features
@@ -104,7 +105,7 @@ def finetune(cfg: DictConfig):
             )
 
             model.head = head
-                
+
     object_dict = {
         "cfg": cfg, 
         "datamodule": datamodule,

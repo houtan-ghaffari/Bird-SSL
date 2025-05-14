@@ -31,13 +31,13 @@ data:
       shuffle: true
       drop_last: true
   dataset:
-   save_to_disk: /scratch/birdset/HSN/HSN_10shot_1
+   save_to_disk: /scratch/birdset/HSN/HSN_10shot_3
 
 seed: 1
 
 logger:
   experiment_name: fewshot_hsn
-  run_name: 10shot_1_ppnet_hsn_${seed}_${start_time}
+  run_name: 10shot_3_ppnet_hsn_${seed}_${start_time}
 
     
 trainer:

@@ -157,6 +157,14 @@ class BaseTransform:
         elif self.input_params.type == "fbank":
             fbank_features = self._compute_fbank_features(waveform_batch["input_values"])     
 
+        elif self.input_params.type == "audio":
+            #audio = self._pad_and_normalize(waveform_batch["input_values"])
+            # pad or truncate
+            audio = waveform_batch["input_values"]
+            return {
+                "audio": audio,
+                "label": torch.Tensor(batch[self.columns[1]])
+            }
         fbank_features = self._pad_and_normalize(fbank_features)
         fbank_features = (fbank_features - self.mean) / (self.std * 2)
         return {
@@ -489,7 +497,15 @@ class BirdSetTrainTransform(TrainTransform):
         
         elif self.input_params.type == "fbank":
             fbank_features = self._compute_fbank_features(waveform_batch["input_values"])
-        
+
+        elif self.input_params.type == "audio":
+            audio = waveform_batch["input_values"]
+            assert len(audio.shape) == 2, f"audios have shape {audio.shape} but expected to be of (batch, -1)"
+            audio = F.pad(audio, (audio.size(0), self.target_length - audio.size(1)))
+            return {
+                "audio": audio,
+                "label": torch.Tensor(batch[self.columns[1]])
+            }
         else:
             raise ValueError("Invalid input type for BirdSetTrainTransform")
 
