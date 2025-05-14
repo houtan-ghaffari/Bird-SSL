@@ -64,7 +64,7 @@ module:
   network:
     ema_update_rate: null
     name: VIT_ppnet
-    freeze_backbone: true
+    freeze_backbone: false
     ppnet:
       num_prototypes: 20
       last_layer_lr: 3e-4 

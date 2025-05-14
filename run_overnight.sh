@@ -259,6 +259,7 @@
 # python finetune.py experiment=paper/ablations/hsn_mlp/amae_mlp.yaml
 # python finetune.py experiment=paper/ablations/hsn_linear/100_epochs_mixup_linear_huge.yaml
 
-python finetune.py experiment=paper/fewshot/ppnet/hsn1shot.yaml
-python finetune.py experiment=paper/fewshot/ppnet/hsn5shot.yaml
-python finetune.py experiment=paper/fewshot/ppnet/hsn10shot.yaml
+python finetune.py experiment=paper/ablations/mixup/0.3mixup_100.yaml
+python finetune.py experiment=paper/ablations/mixup/nomixup_100.yaml
+python finetune.py experiment=paper/ablations/mixup/0.5mixup_100.yaml
+python finetune.py experiment=paper/ablations/mixup/0.7mixup_100.yaml

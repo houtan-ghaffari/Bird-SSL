@@ -31,13 +31,13 @@ data:
       shuffle: true
       drop_last: true
   dataset:
-   save_to_disk: /scratch/birdset/PER/PER_10shot_1
+   save_to_disk: /scratch/birdset/PER/PER_10shot_2
 
 seed: 1
 
 logger:
   experiment_name: fewshot_per
-  run_name: 10shot_1_attentive_per_${seed}_${start_time}
+  run_name: 10shot_2_attentive_per_${seed}_${start_time}
 
 
 trainer:

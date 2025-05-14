@@ -31,13 +31,13 @@ data:
       shuffle: true
       drop_last: true
   dataset:
-   save_to_disk: /scratch/birdset/SNE/SNE_10shot_1
+   save_to_disk: /scratch/birdset/SNE/SNE_10shot_2
 
 seed: 1
 
 logger:
   experiment_name: fewshot_sne
-  run_name: 10shot_1_attentive_sne_${seed}_${start_time}
+  run_name: 10shot_2_attentive_sne_${seed}_${start_time}
 
 
 trainer:
@@ -65,4 +65,4 @@ module:
   network:
     ema_update_rate: null
     freeze_backbone: true
-    global_pool: attentive 
+    global_pool: attentive
