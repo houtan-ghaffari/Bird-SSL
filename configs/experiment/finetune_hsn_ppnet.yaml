@@ -5,8 +5,8 @@ defaults:
   - override /data/loaders: esc50
   - override /data/transform: melbank_birdset
   - override /logger: mlflow
-  - override /module/network: vit_large_16.yaml
-  #- override /module/network: vit_base_16.yaml
+  #- override /module/network: vit_large_16.yaml
+  - override /module/network: vit_base_16.yaml
   #- override /module/network: convnext.yaml
   - override /module/optimizer: adamw
   - override /module/scheduler: cosine
@@ -50,7 +50,7 @@ module:
   optimizer:
     target:
       #lr: 5e-5
-      lr: 3e-4
+      lr: 4e-4
       #lr: 5e-4
       #lr: 1e-4
       #weight_decay: 3e-2
@@ -65,7 +65,8 @@ module:
   network:
     ema_update_rate: null
     name: VIT_ppnet
-    freeze_backbone: False
+    freeze_backbone: True
     ppnet:
-      num_prototypes: 420
+      num_prototypes: 20
+      last_layer_lr: 1e-4
       

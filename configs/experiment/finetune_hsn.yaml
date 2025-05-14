@@ -7,7 +7,9 @@ defaults:
   #- override /data/transform: melbank_esc
   - override /logger: mlflow
   #- override /module/network: vit_large_16.yaml
-  - override /module/network: vit_large_16.yaml
+  #- override /module/network: vit_large_16.yaml
+#  - override /module/network: vit_base_16.yaml
+  - override /module/network: vit_huge_16.yaml
   #- override /module/network: convnext.yaml
   - override /module/optimizer: adamw
   - override /module/scheduler: cosine
@@ -37,7 +39,7 @@ data:
 
     
 trainer:
-  max_epochs: 50
+  max_epochs: 30
   limit_val_batches: 1.0
   check_val_every_n_epoch: 2
   #gradient_clip_val: 0.1

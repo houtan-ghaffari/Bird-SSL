@@ -43,7 +43,6 @@ pretrained_weights_path: /home/lrauch/AudioMAE_XCL_epoch150_213828.ckpt
 #pretrained_weights_path: /home/lrauch/projects/birdMAE/logs/refine_xcm/runs/XCM/VIT_MIM/2025-01-27_142211/callback_checkpoints/VIT_MIM_XCM_epoch=00.ckpt
 #pretrained_weights_path: null
 #pretrained_weights_path: /home/lrauch/AudioMAE_XCL_epoch=99_mixup_l.ckpt
-
 #pretrained_weights_path: /home/lrauch/AudioMAE_XCL_epoch99_large_03mix_permute.ckpt
 target_length: ${data.dataset.target_length}
 #pretrained_weights_path_: /home/lrauch/mnt_check/finetune_xcl/runs/XCL/VIT/2025-01-06_103326/callback_checkpoints/VIT_XCL_epoch=04.ckpt
