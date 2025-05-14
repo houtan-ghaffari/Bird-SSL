@@ -5,8 +5,8 @@
 #SBATCH --gres=gpu:1
 #SBATCH --mem=100gb
 #SBATCH --partition=main
-#SBATCH --job-name=fewshot_ppnet_3
-#SBATCH --output=/mnt/work/bird2vec/logs/fewshot/fewshot_ppnet_%N_%a.log
+#SBATCH --job-name=fewshot_attentive_1
+#SBATCH --output=/mnt/work/bird2vec/logs/fewshot/fewshot_attentive_%N_%a.log
 ######SBATCH --time=01:00:00
 #SBATCH --nodelist=gpu-l40s-1
 #SBATCH --array=0-71%8
@@ -38,13 +38,13 @@ SHOT_IDX=$(( CONFIG_IDX % 3 + 1 ))
 SEED=${SEEDS[$(( SEED_IDX + 1 ))]}
 
 # Construct the configuration path.
-CONFIG_PATH="experiment=paper/fewshot/ppnet/${DATASETS[$DATASET_IDX]}${SHOTS[$SHOT_IDX]}.yaml"
+CONFIG_PATH="experiment=paper/fewshot/attentive/${DATASETS[$DATASET_IDX]}${SHOTS[$SHOT_IDX]}.yaml"
 
 echo "Running experiment: ${CONFIG_PATH} with seed: ${SEED}"
 
 DATASET_NAME=${DATASETS[$DATASET_IDX]}
 
-scontrol update job=$SLURM_JOB_ID name="fewshot_ppnet_${DATASET_NAME}_seed${SEED}_${SLURM_ARRAY_TASK_ID}_3"
+scontrol update job=$SLURM_JOB_ID name="fewshot_attentive_${DATASET_NAME}_seed${SEED}_${SLURM_ARRAY_TASK_ID}_3"
 
 srun python finetune.py \
     ${CONFIG_PATH} \
