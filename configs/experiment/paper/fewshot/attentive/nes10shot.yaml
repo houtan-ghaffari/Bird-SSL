@@ -31,13 +31,13 @@ data:
       shuffle: true
       drop_last: true
   dataset:
-   save_to_disk: /scratch/birdset/NES/NES_10shot_2
+   save_to_disk: /scratch/birdset/NES/NES_10shot_3
 
 seed: 1
 
 logger:
   experiment_name: fewshot_nes
-  run_name: 10shot_2_attentive_nes_${seed}_${start_time}
+  run_name: 10shot_3_attentive_nes_${seed}_${start_time}
 
 
 trainer:
