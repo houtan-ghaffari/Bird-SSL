@@ -16,7 +16,7 @@ defaults:
   - override /paths: workstation
   - override /trainer: single_gpu
 
-seed: 1
+seed: 2
 start_time: ${now:%Y-%m-%d_%H%M%S}
 task_name: "ablate_hsn_mixup"
 

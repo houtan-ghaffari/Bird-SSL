@@ -16,7 +16,7 @@ defaults:
   - override /paths: workstation
   - override /trainer: single_gpu
 
-seed: 1
+seed: 3
 start_time: ${now:%Y-%m-%d_%H%M%S}
 task_name: "ablate_hsn_pooling"
 
@@ -64,7 +64,7 @@ module:
       decay_type: right
       
   network:
-    pretrained_weights_path: /home/lrauch/AudioMAE_XCL_epoch=99_mixup_l.ckpt
+    pretrained_weights_path: /home/lrauch/AudioMAE_XCL_epoch150_213828.ckpt
     name: VIT_ppnet
     freeze_backbone: false
     ppnet:
