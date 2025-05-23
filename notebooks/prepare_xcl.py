@@ -103,4 +103,3 @@ ds_dict = DatasetDict({
 
 
 ds_dict.save_to_disk("/home/lrauch/projects/birdMAE/data/XCM/XCM_processed_100_1events_ogg")
-

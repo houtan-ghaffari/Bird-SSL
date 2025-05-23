@@ -14,3 +14,5 @@ util/__pycache__/pos_embed.cpython-310.pyc
 /.vscode/
 /launch.json
 /.vscode/
+/upload_hf/
+run_overnight.sh

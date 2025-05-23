@@ -28,7 +28,7 @@ export CUDA_LAUNCH_BLOCKING=1
 export HYDRA_FULL_ERROR=1
 
 hostname
-srun python train_ssl.py \
+srun python pretrain.py \
         experiment=pretrain_xcl_wave_base.yaml \
         trainer.devices=4 \
         +trainer.num_nodes=1 \

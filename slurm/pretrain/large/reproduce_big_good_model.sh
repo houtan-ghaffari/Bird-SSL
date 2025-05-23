@@ -29,13 +29,13 @@ export CUDA_LAUNCH_BLOCKING=1
 export HYDRA_FULL_ERROR=1
 
 hostname
-srun python train_ssl.py \
+srun python pretrain.py \
         experiment=pretrain_xcl_wave_large.yaml \
         trainer.devices=4 \
         +trainer.num_nodes=1 \
         trainer.precision=16-mixed \
         data.transform.waveform_augmentations.mixup_wave.p=0.3 \
-        trainer.max_epochs=100 \
+        trainer.max_epochs=150 \
         data.loaders.train.batch_size=256 \
         trainer.gradient_clip_val=1.0 \
         module.optimizer.target.lr=1e-4 \

@@ -1,13 +1,14 @@
 #!/usr/bin/zsh
 #SBATCH --nodes=1
-#SBATCH --ntasks-per-node=4
+#SBATCH --ntasks-per-node=2
 #SBATCH --cpus-per-task=26
-#SBATCH --gres=gpu:4
+#SBATCH --gres=gpu:2
 #SBATCH --mem=500gb
 #SBATCH --partition=main
-#SBATCH --job-name=100ep_birdMAE_XCL_huge_0.3mix_nn
-#SBATCH --output=/mnt/work/bird2vec/logs/without_siwn/birdMAE_XCL_huge_%N_%t_0.3mix_100ep_reproduce_nn.log
-#SBATCH --time=130:00:00
+#SBATCH --job-name=birdMAE_XCL_large_nomix
+#SBATCH --output=/mnt/work/bird2vec/logs/without_siwn/birdMAE_XCL_large_%N_%t_nomix.log
+#SBATCH --time=96:00:00
+###SBATCH --exclude=gpu-v100-3
 #SBATCH --nodelist=gpu-l40s-1
 
 ###SBATCH --exclude=gpu-v100-1,gpu-v100-2,gpu-v100-3,gpu-v100-4
@@ -29,17 +30,14 @@ export HYDRA_FULL_ERROR=1
 
 hostname
 srun python pretrain.py \
-        experiment=pretrain_xcl_wave_huge.yaml \
-        trainer.devices=4 \
+        experiment=pretrain_xcl_wave_large.yaml \
+        trainer.devices=2 \
         +trainer.num_nodes=1 \
-        trainer.precision=bf16 \
-        data.transform.waveform_augmentations.mixup_wave.p=0.3 \
-        trainer.max_epochs=100\
+        trainer.precision=16-mixed \
+        data.transform.waveform_augmentations.mixup_wave.p=0.0 \
+        trainer.max_epochs=35 \
         data.loaders.train.batch_size=128 \
-        module.network.mask_ratio=0.75 \
-        #trainer.gradient_clip_val=2.0
-
-        #data.dataset.save_to_disk="/scratch/birdset/XCL/XCL_processd_500_2events_ogg_addsoundscapes-hsn" \
+        #data.dataset.save_to_disk="/scratch/birdset/XCL/XCL_processed_500_2events_ogg_addsoundscapes-hsn" \
         #trainer.strategy=ddp_find_unused_parameters_true \
         ##ckpt_path="/mnt/work/bird2vec/logs_pretrain_audioset_MAE/pretrain_xcl_large_swin/runs/XCL/AudioMAE/2024-12-12_162203/callback_checkpoints/last.ckpt"
         #ckpt_path="/mnt/work/bird2vec/logs_pretrain_audioset_MAE/pretrain_xcl_wave_large/runs/XCL/AudioMAE/2024-11-23_123703/callback_checkpoints/last.ckpt"

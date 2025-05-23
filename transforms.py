@@ -1,21 +1,18 @@
-from dataclasses import dataclass
 import numpy as np
 import hydra
-from transformers.audio_utils import spectrogram, window_function, mel_filter_bank
 from omegaconf import DictConfig
 import torch 
 import torchvision
 import torch.nn.functional as F
 import torch_audiomentations
 from birdset.datamodule.components.event_decoding import EventDecoding
-from birdset.datamodule.components.augmentations import MultilabelMix, AddBackgroundNoise, NoCallMixer
+from birdset.datamodule.components.augmentations import  NoCallMixer
 from birdset.datamodule.components.augmentations import PowerToDB
-from torch_audiomentations import AddColoredNoise
 
 from torchaudio.compliance.kaldi import fbank
 from torchaudio.transforms import FrequencyMasking, TimeMasking
 from torchaudio.transforms import Spectrogram, MelScale
-from typing import Any, List, Optional, Union
+from typing import List, Union
 
 import numpy as np
 from transformers import BatchFeature
@@ -23,12 +20,9 @@ from transformers import SequenceFeatureExtractor
 from transformers.utils import logging, PaddingStrategy
 import torch 
 import random
-import os
-import glob
-import librosa
-import soundfile as sf
 
-from util.mixup import SpecMixup, SpecMixupN
+from util.mixup import SpecMixup
+
 
 logger = logging.get_logger(__name__)
 
