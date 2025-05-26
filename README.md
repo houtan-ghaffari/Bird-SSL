@@ -60,7 +60,7 @@ python train.py experiment="paper/fewshot/$probing/$probing/$dataset_kshots"
 
 ## Citation 
 ```
-@article{rauch2025maskedautoencoderslistenbirds,
+@article{rauch2025birdmae,
       title={Can Masked Autoencoders Also Listen to Birds?}, 
       author={Lukas Rauch and Ilyass Moummad and René Heinrich and Alexis Joly and Bernhard Sick and Christoph Scholz},
       year={2025},
