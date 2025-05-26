@@ -22,7 +22,7 @@ beautifulsoup4==4.12.3
 -e git+https://github.com/DBD-research-group/BirdSet.git@6e4bbcbbb2e24eaa44eea7ee45c10d9df39d2348#egg=birdset
 bleach==6.1.0
 blinker==1.8.2
-Bottleneck @ file:///croot/bottleneck_1707864210935/work
+Bottleneck==1.3.7
 cachetools==5.5.0
 certifi==2024.8.30
 cffi==1.17.1
@@ -118,8 +118,8 @@ matplotlib-inline==0.1.7
 mdurl==0.1.2
 mistune==3.0.2
 mkl-service==2.4.0
-mkl_fft @ file:///croot/mkl_fft_1725370245198/work
-mkl_random @ file:///croot/mkl_random_1725370241878/work
+mkl_fft==1.3.1
+mkl_random==1.2.7
 mlflow==2.16.2
 mlflow-skinny==2.16.2
 mpmath==1.3.0
@@ -135,8 +135,8 @@ nodeenv==1.9.1
 notebook==7.2.2
 notebook_shim==0.2.4
 numba==0.60.0
-numexpr @ file:///croot/numexpr_1696515281613/work
-numpy @ file:///croot/numpy_and_numpy_base_1708638617955/work/dist/numpy-1.26.4-cp310-cp310-linux_x86_64.whl#sha256=d8cd837ed43e87f77e6efaa08e8de927ca030a1c9c5d04624432d6fb9a74a5ee
+numexpr==2.8.7
+numpy==1.26.4
 nvidia-cublas-cu12==12.1.3.1
 nvidia-cuda-cupti-cu12==12.1.105
 nvidia-cuda-nvrtc-cu12==12.1.105
@@ -156,7 +156,7 @@ opentelemetry-semantic-conventions==0.48b0
 optuna==2.10.1
 overrides==7.7.0
 packaging==24.1
-pandas @ file:///croot/pandas_1718308974269/work/dist/pandas-2.2.2-cp310-cp310-linux_x86_64.whl#sha256=a2434a313a5eb5b4fdbec6c770abfde859f643eff7b3a703791bf8b73e54c394
+pandas==2.2.2
 pandocfilters==1.5.1
 parso==0.8.4
 pbr==6.1.0
@@ -186,11 +186,11 @@ pyperclip==1.9.0
 pyrootutils==1.0.4
 PySocks==1.7.1
 pytest==7.4.4
-python-dateutil @ file:///croot/python-dateutil_1716495738603/work
+python-dateutil==2.9.0.post0
 python-dotenv==1.0.1
 python-json-logger==2.0.7
 pytorch-lightning==2.4.0
-pytz @ file:///croot/pytz_1713974312559/work
+pytz==2024.1
 PyYAML==6.0.2
 pyzmq==26.2.0
 referencing==0.35.1
@@ -210,7 +210,7 @@ Send2Trash==1.8.3
 sentry-sdk==2.14.0
 setproctitle==1.3.3
 sh==2.0.7
-six @ file:///tmp/build/80754af9/six_1644875935023/work
+six==1.16.0
 smmap==5.0.1
 sniffio==1.3.1
 soundfile==0.12.1
@@ -242,7 +242,7 @@ transformers==4.44.2
 triton==2.2.0
 types-python-dateutil==2.9.0.20240906
 typing_extensions==4.12.2
-tzdata @ file:///croot/python-tzdata_1690578112552/work
+tzdata==2023.3
 uri-template==1.3.0
 urllib3==2.2.3
 virtualenv==20.26.4
