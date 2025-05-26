@@ -57,3 +57,14 @@ python train.py experiment="paper/fewshot/$probing/$probing/$dataset_kshots"
 - Bird-MAE Base: Link
 - Bird-MAE Large: Link
 - Bird-MAE Huge: Link
+
+## Citation 
+```
+@article{rauch2025maskedautoencoderslistenbirds,
+      title={Can Masked Autoencoders Also Listen to Birds?}, 
+      author={Lukas Rauch and Ilyass Moummad and René Heinrich and Alexis Joly and Bernhard Sick and Christoph Scholz},
+      year={2025},
+      journal={arXiv:2504.12880},
+}
+```
+
