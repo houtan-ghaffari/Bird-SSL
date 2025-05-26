@@ -32,5 +32,20 @@ example
 
 ## Pretraining on `BirdSet`
 
-The pretraining configs for the base, large and huge model are available in `configs/experiment/pretrain/paper`
+The pretraining configs for the base, large and huge model are available in `configs/experiment/paper/pretrain`. The respective slurm files can be found in `slurm/pretrain/{base,large,huge}`. You have to change the paths etc. Example: 
+```
+sbatch slurm/pretrain/large/large/large.sh
+```
 
+## Multi-Label Benchmark on `BirdSet`
+
+All config files of the experiments for the multi-label benchmark (with fine-tuning and linear probing) are available in `configs/experiment/bigshot`
+
+## Multi-Label Few-Shot Benchmark on `BirdSet`
+
+All config files of the experiments for the multi-label benchmark (with fine-tuning and linear probing) are available in `configs/experiment/fewshot`
+
+## Checkpoints
+- Bird-MAE Base: Link
+- Bird-MAE Large: Link
+- Bird-MAE Huge: Link
