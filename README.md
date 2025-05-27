@@ -20,14 +20,33 @@ pip  install -r requirements.txt
 The paper includes three different types of data that is used: 
 
 - `Pretraining data` for training the Bird-MAE model
-- `Downstream data` for doing the fine-tuning/probing on the complete downstream tasks from BirdSet
-- `Few-shot data` for doing the probing on few-shot setting in BirdSet
+- `Downstream data` for fine-tuning/probing on the complete downstream tasks from BirdSet
+- `Few-shot data` for probing on few-shot setting in BirdSet
 
-For each data type, you have to download and prepare the data. Of course, you could also download the checkpoints of the respective model and skip the pretraining. The downloading and preparation is available in the `util/prepare_data.py` file. 
-Be sure to change the respective paths in the scripts. Example:
+For each data type, you have to download and then prepare the data before running the experiments. You can also download the checkpoints of the respective model and skip the intensive pretraining. The downloading and preparation is available in the `util/prepare_data.py` file. 
+Be sure to change the respective paths in the scripts. 
 
-```python
-example
+
+### Pretraining Data
+You can run the script that downloads the `XCL` dataset from [Hugging Face](https://huggingface.co/datasets/DBD-research-group/BirdSet) and prepares it for pretraining to the curated `XCL-1.7M` from the terminal. Note that you need approximately 500 Gbs of disk space for the download (plus a little bit more for the prepared file).
+
+```
+python util/prepare_data/pretraining.py --save_path --cache_dir 
+```
+
+For example, if you want to get all events, without any curation: 
+
+```
+python util/prepare_data/pretraining.py \
+    --dataset_name "XCL" \
+    --hf_path "DBD-research-group/BirdSet" \
+    --cache_dir "/data/birdset/XCL" \ # download directory of the dataset 
+    --save_path "/scratch/birdset/XCL/XCL_processed_allevents" \ # sub directory of the save_to_disk path
+    --class_limit 0 \
+    --event_limit 0 \
+    --audio_sampling_rate 32000 \
+    --num_proc 1 \ # num proc during download
+    --mapping_num_proc 4 # num proc during event mapping
 ```
 
 ## Pretraining on `BirdSet`
