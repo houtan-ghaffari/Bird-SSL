@@ -41,7 +41,7 @@ python util/prepare_data/pretraining.py \
     --dataset_name "XCL" \
     --hf_path "DBD-research-group/BirdSet" \
     --cache_dir "/data/birdset/XCL" \ # download directory of the dataset 
-    --save_path "/scratch/birdset/XCL/XCL_processed_allevents" \ # sub directory of the save_to_disk path
+    --save_path "/data/birdset/XCL/XCL_processed_allevents" \ # sub directory of the save_to_disk path
     --class_limit 0 \
     --event_limit 0 \
     --audio_sampling_rate 32000 \
