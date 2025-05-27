@@ -32,5 +32,39 @@ example
 
 ## Pretraining on `BirdSet`
 
-The pretraining configs for the base, large and huge model are available in `configs/experiment/pretrain/paper`
+The main pretraining script is `pretrain.py`. The experiments are managed by hydra. The pretraining configs for the base, large and huge model are available in `configs/experiment/paper/pretrain`. The respective slurm files can be found in `slurm/pretrain/{base,large,huge}`. You have to change the paths etc. Example: 
+```
+sbatch slurm/pretrain/large/large/large.sh
+```
+
+## Multi-Label Benchmark on `BirdSet`
+
+All config files of the experiments for the multi-label benchmark (with fine-tuning and linear probing) are available in `configs/experiment/bigshot`. Example: 
+
+``` bash
+python train.py experiment="paper/bigshot/$model/$type/$head/$dataset"
+```
+
+## Multi-Label Few-Shot Benchmark on `BirdSet`
+
+All config files of the experiments for the multi-label benchmark (with fine-tuning and linear probing) are available in `configs/experiment/fewshot`. Example: 
+
+``` bash
+python train.py experiment="paper/fewshot/$probing/$probing/$dataset_kshots"
+```
+
+## Checkpoints
+- Bird-MAE Base: Link
+- Bird-MAE Large: Link
+- Bird-MAE Huge: Link
+
+## Citation 
+```
+@article{rauch2025birdmae,
+      title={Can Masked Autoencoders Also Listen to Birds?}, 
+      author={Lukas Rauch and Ilyass Moummad and René Heinrich and Alexis Joly and Bernhard Sick and Christoph Scholz},
+      year={2025},
+      journal={arXiv:2504.12880},
+}
+```
 
