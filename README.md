@@ -79,10 +79,6 @@ python util/prepare_data/downstream.py \
 Each dataset is cached individually in a subfolder of `--cache-dir-base` and then prepared into a processed format used by the BirdSet pipeline.
 Note that `classlimit`, `eventlimit`, and other parameters are defined inside the script and can be modified as needed.
 
----
-
-Let me know if you also want to include default output locations or an example snippet using `BirdSetDataModule` afterward.
-
 
 ### Experiments
 All config files of the experiments for the multi-label benchmark (with fine-tuning and linear probing) are available in `configs/experiment/bigshot`. Example: 
