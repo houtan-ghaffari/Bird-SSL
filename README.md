@@ -60,6 +60,29 @@ sbatch slurm/pretrain/large/large/large.sh
 ## Multi-Label Benchmark on `BirdSet`
 ### Data
 
+You can use the script below to download and prepare the downstream BirdSet datasets for evaluation. It downloads each dataset from Hugging Face and caches it locally, then processes it into the required format for multi-label classification tasks.
+
+Run the script from the terminal:
+
+```bash
+python util/prepare_data/downstream.py --cache-dir-base /data/birdset
+```
+
+You can also specify which datasets to process using the `--dataset-names` argument:
+
+```bash
+python util/prepare_data/downstream.py \
+    --dataset-names PER NES HSN POW \
+    --cache-dir-base /data/birdset
+```
+
+Each dataset is cached individually in a subfolder of `--cache-dir-base` and then prepared into a processed format used by the BirdSet pipeline.
+Note that `classlimit`, `eventlimit`, and other parameters are defined inside the script and can be modified as needed.
+
+---
+
+Let me know if you also want to include default output locations or an example snippet using `BirdSetDataModule` afterward.
+
 
 ### Experiments
 All config files of the experiments for the multi-label benchmark (with fine-tuning and linear probing) are available in `configs/experiment/bigshot`. Example: 
