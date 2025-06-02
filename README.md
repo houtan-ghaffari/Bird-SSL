@@ -4,7 +4,7 @@ This repository hosts the code of "**Can Masked Autoencoders listen to Bird?**".
 
 <br>
 <div align="center">
-  <img src="https://github.com/DBD-research-group/Bird-MAE/blob/main/docs/imgs/GA.png" alt="logo", width=700>
+  <img src="https://github.com/DBD-research-group/Bird-MAE/blob/main/docs/imgs/GA.png" alt="logo", width=600>
 </div>
 <br>
 
@@ -24,10 +24,11 @@ The paper includes three different types of data that is used:
 - `Few-shot data` for probing on few-shot setting in BirdSet
 
 For each data type, you have to download and then prepare the data before running the experiments. You can also download the checkpoints of the respective model and skip the intensive pretraining. The downloading and preparation is available in the `util/prepare_data.py` file. 
-Be sure to change the respective paths in the scripts. 
+Be sure to change the respective paths in the scripts. For each experiment, we add instruction on how to prepare the data. 
 
+## Pretraining on `BirdSet`
 
-### Pretraining Data
+### Data
 You can run the script that downloads the `XCL` dataset from [Hugging Face](https://huggingface.co/datasets/DBD-research-group/BirdSet) and prepares it for pretraining to the curated `XCL-1.7M` from the terminal. Note that you need approximately 500 Gbs of disk space for the download (plus a little bit more for the prepared file).
 
 ```
@@ -49,7 +50,7 @@ python util/prepare_data/pretraining.py \
     --mapping_num_proc 4 # num proc during event mapping
 ```
 
-## Pretraining on `BirdSet`
+### Experiments
 
 The main pretraining script is `pretrain.py`. The experiments are managed by hydra. The pretraining configs for the base, large and huge model are available in `configs/experiment/paper/pretrain`. The respective slurm files can be found in `slurm/pretrain/{base,large,huge}`. You have to change the paths etc. Example: 
 ```
@@ -57,7 +58,10 @@ sbatch slurm/pretrain/large/large/large.sh
 ```
 
 ## Multi-Label Benchmark on `BirdSet`
+### Data
 
+
+### Experiments
 All config files of the experiments for the multi-label benchmark (with fine-tuning and linear probing) are available in `configs/experiment/bigshot`. Example: 
 
 ``` bash
@@ -65,7 +69,10 @@ python train.py experiment="paper/bigshot/$model/$type/$head/$dataset"
 ```
 
 ## Multi-Label Few-Shot Benchmark on `BirdSet`
+### Data 
 
+
+### Experiments
 All config files of the experiments for the multi-label benchmark (with fine-tuning and linear probing) are available in `configs/experiment/fewshot`. Example: 
 
 ``` bash
