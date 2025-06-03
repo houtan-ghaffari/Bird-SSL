@@ -90,6 +90,35 @@ python train.py experiment="paper/bigshot/$model/$type/$head/$dataset"
 ## Multi-Label Few-Shot Benchmark on `BirdSet`
 ### Data 
 
+You can use the script below to create k-shot BirdSet subsets for few-shot evaluation.
+It first downloads each requested split from Hugging Face (if not cached), then samples the desired number of recordings per class under the chosen selection rule, and finally saves the processed `DatasetDict` to disk.
+
+Run the script from the terminal:
+
+```bash
+python util/prepare_data/fewshot.py --cache-dir-base /data/birdset
+```
+
+You can customise the datasets, shot counts, and random seeds:
+
+```bash
+python util/prepare_data/fewshot.py \
+    --dataset-names PER NES HSN POW \
+    --shots 1 5 10 \
+    --seeds 1 2 3 \
+    --condition lenient \
+    --cache-dir-base /data/birdset
+```
+
+Each subset is stored in a subfolder of `--cache-dir-base`, e.g.
+
+```
+/data/birdset/HSN/HSN_5shot_1/
+```
+
+The original **`test_5s`** split is kept intact, while the **`train`** split is replaced by the new k-shot set.
+Sampling rules (`strict` vs `lenient`), `classlimit`, `eventlimit`, and other parameters are defined inside the script and can be adjusted as needed.
+
 
 ### Experiments
 All config files of the experiments for the multi-label benchmark (with fine-tuning and linear probing) are available in `configs/experiment/fewshot`. Example: 
