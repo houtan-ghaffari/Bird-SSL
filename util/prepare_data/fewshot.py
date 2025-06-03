@@ -1,9 +1,11 @@
-# fewshot data 
-from datasets import DatasetDict, Dataset
+#!/usr/bin/env python
+import os
+from datasets import DatasetDict, Dataset, load_dataset
 import random
 from birdset.datamodule.components.event_mapping import XCEventMapping
 import soundfile as sf
 import torch
+import argparse 
 
 class BaseCondition:
 
@@ -187,59 +189,47 @@ def _remove_duplicates(batch: dict[str, ]):
 
     return new_batch
 
-
-
-import os
-from datasets import load_dataset
-import sys
-import os
-
-# Define dataset names and optional revisions.
-datasets_info = {
-     "HSN": {},
-     "POW": {},
-     "NES": {},
-     "PER": {},
-     "SNE": {},
-     "SSW": {},
-     "UHH": {},
-     "NBP": {},
+CONDITION_MAP = {
+    "strict": StrictCondition(),
+    "lenient": LenientCondition(),
 }
 
-# Define shot levels and seeds.
-shot_numbers = [1, 5, 10] 
-seeds = [1, 2, 3]
 
-# Base directory where the few-shot subsets will be saved.
-base_save_path = "/scratch/birdset"
+def process_fewshot(
+    dataset_names: list[str],
+    shot_numbers: list[int],
+    seeds: list[int],
+    condition: str,
+    cache_dir_base: str,
+):
+    cond = CONDITION_MAP[condition.lower()]
+    for ds_name in dataset_names:
+        cache_dir = os.path.join(cache_dir_base, ds_name)
+        print(f"Loading {ds_name} …", flush=True)
+        ds = load_dataset("DBD-research-group/BirdSet", ds_name, cache_dir=cache_dir, num_proc=1)
 
-for ds_name, params in datasets_info.items():
-    revision = params.get("revision")
-    print(f"Loading dataset {ds_name}...")
-    # Load dataset with revision if provided.
-    if revision:
-        ds = load_dataset("DBD-research-group/BirdSet", ds_name, num_proc=1, revision=revision,
-                           cache_dir=os.path.join(base_save_path, ds_name))
-    else:
-        ds = load_dataset("DBD-research-group/BirdSet", ds_name, num_proc=1,
-                          cache_dir=os.path.join(base_save_path, ds_name))
+        for shot in shot_numbers:
+            for seed in seeds:
+                tag = f"{ds_name}_{shot}shot_{seed}"
+                print(f"Creating {tag} with {condition} condition …", flush=True)
+                subset = create_few_shot_subset(
+                    ds,
+                    few_shot=shot,
+                    data_selection_condition=cond,
+                    fill_up=False,
+                    random_seed=seed,
+                )
+                save_dir = os.path.join(cache_dir_base, ds_name, tag)
+                subset.save_to_disk(save_dir)
+                print(f"✔ Saved to {save_dir}", flush=True)
 
-    # Compute NUM_CLASSES from the dataset's ClassLabel feature.
-    NUM_CLASSES = ds["train"].features["ebird_code"].num_classes
-    print(f"{ds_name} has {NUM_CLASSES} classes.")
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser("Few-shot BirdSet subset creator")
+    parser.add_argument("--dataset-names", nargs="+", default=["PER", "NES", "UHH", "HSN", "NBP", "POW", "SSW", "SNE"])
+    parser.add_argument("--shots", type=int, nargs="+", default=[1, 5, 10], help="k values for k-shot")
+    parser.add_argument("--seeds", type=int, nargs="+", default=[1, 2, 3])
+    parser.add_argument("--condition", choices=["strict", "lenient"], default="lenient")
+    parser.add_argument("--cache-dir-base", type=str, default="/scratch/birdset")
+    args = parser.parse_args()
 
-    for shot in shot_numbers:
-        for seed in seeds:
-            print(f"Creating {shot}-shot subset for {ds_name} with seed {seed}...")
-            few_shot_ds = create_few_shot_subset(
-                ds,
-                few_shot=shot,
-                data_selection_condition=LenientCondition(),
-                fill_up=False,
-                random_seed=seed
-            )
-            # Define the saving path.
-            save_dir = os.path.join(base_save_path, ds_name, f"{ds_name}_{shot}shot_{seed}")
-            os.makedirs(os.path.dirname(save_dir), exist_ok=True)
-            few_shot_ds.save_to_disk(save_dir)
-            print(f"Saved {ds_name} {shot}-shot, seed {seed} subset to {save_dir}")
+    process_fewshot(args.dataset_names, args.shots, args.seeds, args.condition, args.cache_dir_base)
