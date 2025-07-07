@@ -100,24 +100,25 @@ class HFDataModule(pl.LightningDataModule):
         self.test_loader_configs = loader_configs.test
 
     def prepare_data(self):
+        return
         #pl.seed_everything(self.seed) ## needed? 
-        rank_zero_info(">> Preparing data")
-        if not os.path.exists(self.data_dir):
-            rank_zero_info(f"[{str(datetime.now())}] Data directory {self.data_dir} does not exist. Creating it.")
-            os.makedirs(self.data_dir)
+        # rank_zero_info(">> Preparing data")
+        # if not os.path.exists(self.data_dir):
+        #     rank_zero_info(f"[{str(datetime.now())}] Data directory {self.data_dir} does not exist. Creating it.")
+        #     os.makedirs(self.data_dir)
         
-        cache_dir_is_empty = len(os.listdir(self.data_dir)) == 0
+        # cache_dir_is_empty = len(os.listdir(self.data_dir)) == 0
         
-        if cache_dir_is_empty:
-            rank_zero_info(f"[{str(datetime.now())}] Downloading dataset.")
-            if self.hf_name:
-                load_dataset(self.hf_path, self.hf_name, cache_dir=self.data_dir, load_from_cache_file=True)
-            else:
-                load_dataset(self.hf_path, cache_dir=self.data_dir)
-        else:
-            rank_zero_info(
-                f"[{str(datetime.now())}] Data cache {self.data_dir} exists. Loading from cache in setup."
-            )
+        # if cache_dir_is_empty:
+        #     rank_zero_info(f"[{str(datetime.now())}] Downloading dataset.")
+        #     if self.hf_name:
+        #         load_dataset(self.hf_path, self.hf_name, cache_dir=self.data_dir, load_from_cache_file=True)
+        #     else:
+        #         load_dataset(self.hf_path, cache_dir=self.data_dir)
+        # else:
+        #     rank_zero_info(
+        #         f"[{str(datetime.now())}] Data cache {self.data_dir} exists. Loading from cache in setup."
+        #     )
     
     def setup(self, stage:str) -> None: 
         if stage == "fit" or stage is None: 
