@@ -484,6 +484,17 @@ class RiseRunDecay(torch.optim.lr_scheduler._LRScheduler):
 
         return [lr * factor if (lr * factor) > self.lowest_lr else self.lowest_lr for lr in self.base_lrs]
 
+class EMA_Weight_Decay_Schedule:
+    def __init__(self):
+        self.w = torch.linspace(0.9998, 0.99999, steps=7*len(train_loader))
+        self.counter = 0
+    def step(self):
+        w = self.w[self.counter]
+        self.counter += 1
+        self.counter = min(self.counter, self.w.shape[0]-1)
+        return w
+        
+        
 def masked_reconstruction_loss(pred, target, mask):
     loss = (pred - target) ** 2
     loss = loss.mean(dim=-1)
@@ -500,22 +511,22 @@ def ema_update(ema_model, model, buffers=True, decay=.999):
             else:
                 b_avg.data = decay * b_avg.data + (1. - decay) * b.data
 
-def train_step(student, teacher, optimizer, train_loader, data_transforms, scheduler=None, device='cuda', clip_norm=1.):
+def train_step(student, teacher, optimizer, train_loader, scheduler=None, device='cuda', clip_norm=4., mask_ratio=0.8, ema_weight_schedule):
     losses = []
     
     student.train()
     teacher.eval()
     
     for x in tqdm(train_loader, leave=False):
-        x = x.to(device)
+        x = x.to(device)  # B=12, 1, T=512, F=128
     
-        with torch.no_grad():
-            x = data_transforms(x)
+        # with torch.no_grad():
+        #     x = data_transforms(x)
         
         with torch.autocast(device_type=device, dtype=torch.bfloat16):
-            cls_pred, patch_pred, mask = student(x, 0.8)
+            cls_pred, patch_pred, mask = student(x, mask_ratio)  # cls_pred: (B*clone_size, D), patch_pred: (B*clone_size, L=256, D), mask: (B*clone_size, L=256)
             with torch.no_grad():
-                patch_target = teacher(x)
+                patch_target = teacher(x)  # (B*clone_size, L=256, D)
         
         cls_pred, patch_pred, mask, patch_target = cls_pred.float(), patch_pred.float(), mask.float(), patch_target.float()  
         cls_target = patch_target.mean(dim=1)  # B*clone_size, 768 
@@ -530,8 +541,9 @@ def train_step(student, teacher, optimizer, train_loader, data_transforms, sched
         if scheduler is not None:
             scheduler.step()
         optimizer.zero_grad()
-        
-        ema_update(teacher.encoder, student.encoder)
+
+        w = ema_weight_schedule.step()
+        ema_update(teacher.encoder, student.encoder, decay=w)
         
         losses.append(loss.detach().cpu().item())
     
@@ -541,9 +553,11 @@ def train_step(student, teacher, optimizer, train_loader, data_transforms, sched
 epochs = 30
 device = 'cuda'
 decoder_type = 'cnn2d'  # cnn2d, cnn1d, mlplstm, vit, swin
-sample_dur = 5.11
+sample_dur = 5
 patch_size = (16, 16)
 clone_size = 16
+mask_ratio = 0.8
+clip_norm= 4.
 # if decoder_type == 'cnn2d':
 #     decoder_cls = 
 #     decoder_kwargs = {'kernel_size': 3, 'stride': 1, 'padding': 'same', 'groups': 16, 'activation': nn.GELU, 'add_residual': True, 'num_layers': 6}
@@ -572,18 +586,18 @@ teacher.encoder.load_state_dict(student.encoder.state_dict())
 teacher.requires_grad_(False)
 student.compile(mode='default')
 teacher.compile(mode='default')
-optimizer = torch.optim.Adam(student.parameters(), lr=0.0002, weight_decay=0.01)  # betas=[0.9, 0.95]
-scheduler = RiseRunDecay(optimizer, steps_in_epoch=len(train_loader), warmup=4, total_epochs=epochs, lowest_lr=1e-7)
+optimizer = torch.optim.AdamW(student.parameters(), lr=0.0005, weight_decay=0.05)  # betas=[0.9, 0.95]
+scheduler = RiseRunDecay(optimizer, steps_in_epoch=len(train_loader), warmup=4, total_epochs=epochs, lowest_lr=1e-6)
 print(f'#parameters: {sum(p.numel() for p in student.parameters()):_}')
 print(f'#parameters: {sum(p.numel() for p in teacher.parameters()):_}')
+ema_weight_schedule = EMA_Weight_Decay_Schedule()
 
 # run
 if __name__ == "__main__":
   train_loader = ...
-  data_transforms = ...
   pbar = tqdm(range(epochs), colour='orange')
   for epoch in pbar:
-      train_loss = train_step(student, teacher, optimizer, train_loader, data_transforms, scheduler)
+      train_loss = train_step(student, teacher, optimizer, train_loader, scheduler, device, clip_norm, mask_ratio, ema_weight_schedule)
       history['train_loss'].append(train_loss)
       if epoch in [0, 4, 9, 14, 19, 24, 29]:  # to make plots later for performance at different epochs
           torch.save({'encoder': student.encoder.state_dict(), 'ema_encoder': teacher.encoder.state_dict(), 'decoder': student.decoder.state_dict(), 'opt': optimizer.state_dict(), 'epochs': epochs}, state_path.as_posix().split('.pt')[0] + f"_epoch{epoch+1}.pt")
