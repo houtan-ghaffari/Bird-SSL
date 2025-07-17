@@ -576,7 +576,7 @@ teacher.encoder.load_state_dict(student.encoder.state_dict())
 teacher.requires_grad_(False)
 student.compile(mode='default')
 teacher.compile(mode='default')
-optimizer = torch.optim.AdamW(student.parameters(), lr=0.0005, weight_decay=0.05)  # betas=[0.9, 0.95]
+optimizer = torch.optim.AdamW(student.parameters(), lr=0.0005, weight_decay=0.05, betas=[0.9, 0.95])
 scheduler = RiseRunDecay(optimizer, steps_in_epoch=len(train_loader), warmup=epochs//8, total_epochs=epochs, lowest_lr=1e-6)
 print(f'#parameters: {sum(p.numel() for p in student.parameters()):_}')
 print(f'#parameters: {sum(p.numel() for p in teacher.parameters()):_}')
