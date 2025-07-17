@@ -484,14 +484,16 @@ class RiseRunDecay(torch.optim.lr_scheduler._LRScheduler):
 
         return [lr * factor if (lr * factor) > self.lowest_lr else self.lowest_lr for lr in self.base_lrs]
 
-class EMA_Weight_Decay_Schedule:
-    def __init__(self):
-        self.w = torch.linspace(0.9998, 0.99999, steps=7*len(train_loader))
+class EMA_Weight_Decay_Scheduler:
+    def __init__(self, decay_start=0.9998, decay_end=0.99999, max_iter=None):
+        self.decays = np.linspace(decay_start, decay_end, max_iter, dtype=np.float32).tolist()
+        self.max_iter = max_iter
         self.counter = 0
+        
     def step(self):
-        w = self.w[self.counter]
+        w = self.decays[self.counter]
         self.counter += 1
-        self.counter = min(self.counter, self.w.shape[0]-1)
+        self.counter = min(self.counter, self.max_iter-1)
         return w
         
         
@@ -511,7 +513,7 @@ def ema_update(ema_model, model, buffers=True, decay=.999):
             else:
                 b_avg.data = decay * b_avg.data + (1. - decay) * b.data
 
-def train_step(student, teacher, optimizer, train_loader, scheduler=None, device='cuda', clip_norm=4., mask_ratio=0.8, ema_weight_schedule):
+def train_step(student, teacher, optimizer, train_loader, scheduler=None, device='cuda', clip_norm=4., mask_ratio=0.8, ema_scheduler=None):
     losses = []
     
     student.train()
@@ -541,9 +543,12 @@ def train_step(student, teacher, optimizer, train_loader, scheduler=None, device
         if scheduler is not None:
             scheduler.step()
         optimizer.zero_grad()
-
-        w = ema_weight_schedule.step()
-        ema_update(teacher.encoder, student.encoder, decay=w)
+        
+        if ema_scheduler is not None:
+            decay = ema_scheduler.step()
+        else:
+            decay = 0.999
+        ema_update(teacher.encoder, student.encoder, decay=decay)
         
         losses.append(loss.detach().cpu().item())
     
@@ -590,14 +595,14 @@ optimizer = torch.optim.AdamW(student.parameters(), lr=0.0005, weight_decay=0.05
 scheduler = RiseRunDecay(optimizer, steps_in_epoch=len(train_loader), warmup=4, total_epochs=epochs, lowest_lr=1e-6)
 print(f'#parameters: {sum(p.numel() for p in student.parameters()):_}')
 print(f'#parameters: {sum(p.numel() for p in teacher.parameters()):_}')
-ema_weight_schedule = EMA_Weight_Decay_Schedule()
+ema_scheduler = EMA_Weight_Decay_Scheduler()
 
 # run
 if __name__ == "__main__":
   train_loader = ...
   pbar = tqdm(range(epochs), colour='orange')
   for epoch in pbar:
-      train_loss = train_step(student, teacher, optimizer, train_loader, scheduler, device, clip_norm, mask_ratio, ema_weight_schedule)
+      train_loss = train_step(student, teacher, optimizer, train_loader, scheduler, device, clip_norm, mask_ratio, ema_scheduler)
       history['train_loss'].append(train_loss)
       if epoch in [0, 4, 9, 14, 19, 24, 29]:  # to make plots later for performance at different epochs
           torch.save({'encoder': student.encoder.state_dict(), 'ema_encoder': teacher.encoder.state_dict(), 'decoder': student.decoder.state_dict(), 'opt': optimizer.state_dict(), 'epochs': epochs}, state_path.as_posix().split('.pt')[0] + f"_epoch{epoch+1}.pt")
