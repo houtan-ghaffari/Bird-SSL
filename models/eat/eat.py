@@ -123,8 +123,10 @@ class Attention(nn.Module):
 
 class EncoderBlock(nn.Module):
 
-    def __init__(self, in_dim, num_heads, expand_ratio=4., qkv_bias=True, dropout=0, drop_path=0, norm_layer=nn.LayerNorm):
+    def __init__(self, in_dim, num_heads, expand_ratio=4., qkv_bias=True, dropout=0, drop_path=0, norm_layer=nn.LayerNorm, layer_norm_first=False, ffn_targets=True):
         super().__init__()
+        self.layer_norm_first = layer_norm_first
+        self.ffn_targets = ffn_targets
         self.attn = Attention(in_dim, num_heads, qkv_bias)
         self.ff = FeedForward(in_dim, int(in_dim * expand_ratio), dropout)
         self.ln1 = norm_layer(in_dim)
@@ -133,8 +135,21 @@ class EncoderBlock(nn.Module):
         self.drop_path2 = DropPath(drop_path) if drop_path > 0. else nn.Identity()
 
     def forward(self, x):
-        x = x + self.drop_path1(self.attn(self.ln1(x)))
-        return x + self.drop_path2(self.ff(self.ln2(x)))
+        if self.layer_norm_first:
+            x = x + self.drop_path1(self.attn(self.ln1(x)))
+            t = self.ff(self.ln2(x))
+            x = x + self.drop_path2(t)
+            if not self.ffn_targets:
+                t = x
+        else:
+            x = x + self.drop_path1(self.attn(x))
+            r = self.ln1(x)
+            x = self.ff(r)
+            t = x
+            x = self.ln2(r + self.drop_path2(x))
+            if not self.ffn_targets:
+                t = x
+        return x, t
 
 class PatchEmbed(nn.Module):
 
@@ -180,7 +195,7 @@ class EAT_Encoder(nn.Module):
         self.blocks = nn.ModuleList([EncoderBlock(embed_dim, num_heads, mlp_ratio, qkv_bias, dropout, dpr[i], norm_layer) for i in range(depth)])
         self.norm = norm_layer(embed_dim)
     
-    def inverse_block_mask(self, shape, mask_ratio=0.8, num_freq_patches=8, num_time_patches=32, mask_length=5, mask_prob_adjust=0.1, require_same_masks=True):
+    def inverse_block_mask(self, shape, mask_ratio=0.8, num_freq_patches=8, num_time_patches=32, mask_length=5, mask_prob_adjust=0.07, require_same_masks=True):
         
         if mask_ratio == 0:
             return x, None, None
@@ -288,7 +303,7 @@ class EAT_Encoder(nn.Module):
         
         # apply Transformer blocks
         for blk in self.blocks:
-            x = blk(x)
+            x, _ = blk(x)
         x = self.norm(x)
 
         # separate cls from the rest
@@ -304,8 +319,8 @@ class EAT_Encoder(nn.Module):
         x = x + self.pos_embed
         features = []
         for blk in self.blocks:
-            x = blk(x)
-            features.append(x[:, 1:, :].clone())
+            x, t = blk(x)
+            features.append(t[:, 1:, :].clone())
         return features
        
     def forward(self, x, mask_ratio=0.8): 
