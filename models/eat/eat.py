@@ -1,36 +1,13 @@
-import math
-import random
-import json
 from pathlib import Path
 from datetime import datetime
 from functools import partial
-
 import numpy as np
 import pandas as pd
-from sklearn import metrics
-import librosa
-from tqdm.notebook import tqdm
-import matplotlib.pyplot as plt
-
+from tqdm import tqdm
 import torch
 from torch import nn
 import torch.nn.functional as F
-from torch.utils.data import Dataset, DataLoader
-import torchaudio
-from torchaudio.transforms import Spectrogram
-from torchaudio.transforms import MelScale
-from torchaudio.transforms import AmplitudeToDB
-from torchaudio.transforms import TimeMasking
-from torchaudio.transforms import FrequencyMasking
-from torchaudio.transforms import TimeStretch
-# from torchaudio.functional import pitch_shift
-import torchvision
 
-from datasets import load_dataset
-from datasets import Dataset as HFD
-
-device = 'cuda'
-seed = 42
 
 # Decoder
 class Conv2dLayerNorm(nn.Module):
@@ -170,10 +147,9 @@ class PatchEmbed(nn.Module):
         self.proj = nn.Conv2d(in_chans, emb_dim, kernel_size=patch_size, stride=patch_size)
        
     def forward(self, x):
-        # B, C, H, W = x.shape
-        x = self.proj(x) # 1, 1, 512, 128 -> 1, 768, 32, 8 (batch, 768 channel, 32 height, 8 width)
-        x = x.flatten(2) # 1, 768, 32, 8 -> 1, 768, 256
-        x = x.transpose(1, 2) # 1, 768, 256 -> 1, 256, 768
+        x = self.proj(x) # B, C=1, T=512, F=128 -> B, 768, 32, 8
+        x = x.flatten(2) # B, 768, 32, 8 -> B, 768, 256
+        x = x.transpose(1, 2) # B, 768, 256 -> B, 256, 768
         return x
 
 class EAT_Encoder(nn.Module):
@@ -322,7 +298,7 @@ class EAT_Encoder(nn.Module):
         return cls_pred, patch_pred, mask, ids_restore
 
     def teacher_forward(self, x, mask_ratio=0):
-        x = self.patch_embed(x)  # B, 1, T, F -> B, L=256, D=768
+        x = self.patch_embed(x)  # B, C=1, T=512, F=128 -> B, L=256, D=768
         cls_tokens = self.cls_token.expand(x.shape[0], -1, -1)
         x = torch.cat((cls_tokens, x), dim=1)
         x = x + self.pos_embed
@@ -418,7 +394,6 @@ class EAT_Teacher(nn.Module):
         super().__init__()
 
         self.encoder = EAT_Encoder(input_shape, patch_size, embed_dim, depth, num_heads, mlp_ratio, qkv_bias, dropout, drop_path_rate, pos_trainable, clone_size, mode='teacher')
-        # self.num_freq_patches, self.num_time_patches = self.encoder.patch_embed.patch_ft
         self.clone_size = clone_size
         self.average_top_k_layers = average_top_k_layers
         self.instance_norm_target_layer = instance_norm_target_layer
@@ -486,14 +461,14 @@ class RiseRunDecay(torch.optim.lr_scheduler._LRScheduler):
 
 class EMA_Weight_Decay_Scheduler:
     def __init__(self, decay_start=0.9998, decay_end=0.99999, max_iter=None):
-        self.decays = np.linspace(decay_start, decay_end, max_iter, dtype=np.float32).tolist()
+        self.decays = np.linspace(decay_start, decay_end, max_iter, dtype=np.float32).tolist() + [decay_end]
         self.max_iter = max_iter
         self.counter = 0
         
     def step(self):
         w = self.decays[self.counter]
         self.counter += 1
-        self.counter = min(self.counter, self.max_iter-1)
+        self.counter = min(self.counter, self.max_iter)
         return w
         
         
@@ -521,17 +496,14 @@ def train_step(student, teacher, optimizer, train_loader, scheduler=None, device
     
     for x in tqdm(train_loader, leave=False):
         x = x.to(device)  # B=12, 1, T=512, F=128
-    
-        # with torch.no_grad():
-        #     x = data_transforms(x)
         
         with torch.autocast(device_type=device, dtype=torch.bfloat16):
-            cls_pred, patch_pred, mask = student(x, mask_ratio)  # cls_pred: (B*clone_size, D), patch_pred: (B*clone_size, L=256, D), mask: (B*clone_size, L=256)
+            cls_pred, patch_pred, mask = student(x, mask_ratio)  # cls_pred: (B*clone_size, D=768), patch_pred: (B*clone_size, L=256, D), mask: (B*clone_size, L=256)
             with torch.no_grad():
                 patch_target = teacher(x)  # (B*clone_size, L=256, D)
         
         cls_pred, patch_pred, mask, patch_target = cls_pred.float(), patch_pred.float(), mask.float(), patch_target.float()  
-        cls_target = patch_target.mean(dim=1)  # B*clone_size, 768 
+        cls_target = patch_target.mean(dim=1)  # B*clone_size, D=768 
         
         # local (patch) loss + global (utterance) loss
         loss = masked_reconstruction_loss(patch_pred, patch_target, mask)
@@ -557,21 +529,19 @@ def train_step(student, teacher, optimizer, train_loader, scheduler=None, device
 # config
 epochs = 30
 device = 'cuda'
-decoder_type = 'cnn2d'  # cnn2d, cnn1d, mlplstm, vit, swin
+seed = 42
 sample_dur = 5
 patch_size = (16, 16)
 clone_size = 16
+mask_mode = 'inv'
 mask_ratio = 0.8
 clip_norm= 4.
-# if decoder_type == 'cnn2d':
-#     decoder_cls = 
+decoder_type = 'cnn2d'  # cnn2d, cnn1d, mlplstm, vit, swin
+# if decoder_type == 'cnn2d': for ablation, later...
+#     decoder_cls = LSTM or CNN2D
 #     decoder_kwargs = {'kernel_size': 3, 'stride': 1, 'padding': 'same', 'groups': 16, 'activation': nn.GELU, 'add_residual': True, 'num_layers': 6}
-mask_mode = 'inv'
-use_mixup = False
 
-experiment_name = f"EAT_{decoder_type}_{patch_size[0]}x{patch_size[1]}_{mask_mode}mask_{clone_size}clone"
-if use_mixup:
-     experiment_name += "_mixup"
+experiment_name = f"EAT_{decoder_type}_{patch_size[0]}x{patch_size[1]}_{mask_mode}mask{int(mask_ratio*100)}_{clone_size}clone"
 print(experiment_name)
 
 # saving and monitoring
@@ -592,20 +562,20 @@ teacher.requires_grad_(False)
 student.compile(mode='default')
 teacher.compile(mode='default')
 optimizer = torch.optim.AdamW(student.parameters(), lr=0.0005, weight_decay=0.05)  # betas=[0.9, 0.95]
-scheduler = RiseRunDecay(optimizer, steps_in_epoch=len(train_loader), warmup=4, total_epochs=epochs, lowest_lr=1e-6)
+scheduler = RiseRunDecay(optimizer, steps_in_epoch=len(train_loader), warmup=epochs//8, total_epochs=epochs, lowest_lr=1e-6)
 print(f'#parameters: {sum(p.numel() for p in student.parameters()):_}')
 print(f'#parameters: {sum(p.numel() for p in teacher.parameters()):_}')
-ema_scheduler = EMA_Weight_Decay_Scheduler()
+ema_scheduler = EMA_Weight_Decay_Scheduler(decay_start=0.9998, decay_end=0.99999, max_iter=len(train_loader)*(epochs//4))
 
 # run
 if __name__ == "__main__":
-  train_loader = ...
-  pbar = tqdm(range(epochs), colour='orange')
-  for epoch in pbar:
-      train_loss = train_step(student, teacher, optimizer, train_loader, scheduler, device, clip_norm, mask_ratio, ema_scheduler)
-      history['train_loss'].append(train_loss)
-      if epoch in [0, 4, 9, 14, 19, 24, 29]:  # to make plots later for performance at different epochs
-          torch.save({'encoder': student.encoder.state_dict(), 'ema_encoder': teacher.encoder.state_dict(), 'decoder': student.decoder.state_dict(), 'opt': optimizer.state_dict(), 'epochs': epochs}, state_path.as_posix().split('.pt')[0] + f"_epoch{epoch+1}.pt")
-    pbar.set_description(f"loss={train_loss:.4f}")
+    train_loader = None
+    pbar = tqdm(range(epochs), colour='orange')
+    for epoch in pbar:
+        train_loss = train_step(student, teacher, optimizer, train_loader, scheduler, device, clip_norm, mask_ratio, ema_scheduler)
+        history['train_loss'].append(train_loss)
+        if epoch in [0, 4, 9, 14, 19, 24, 29]:  # to make plots later for performance at different epochs
+            torch.save({'encoder': student.encoder.state_dict(), 'ema_encoder': teacher.encoder.state_dict(), 'decoder': student.decoder.state_dict(), 'opt': optimizer.state_dict(), 'epochs': epochs}, state_path.as_posix().split('.pt')[0] + f"_epoch{epoch+1}.pt")
+        pbar.set_description(f"loss={train_loss:.4f}")
 
-  _ = pd.DataFrame(history).to_csv(history_path)
+    _ = pd.DataFrame(history).to_csv(history_path)
