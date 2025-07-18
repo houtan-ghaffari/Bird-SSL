@@ -198,7 +198,7 @@ class EAT_Encoder(nn.Module):
     def inverse_block_mask(self, shape, mask_ratio=0.8, num_freq_patches=8, num_time_patches=32, mask_length=5, mask_prob_adjust=0.07, require_same_masks=True):
         
         if mask_ratio == 0:
-            return x, None, None
+            return None, None, None
         
         assert mask_length > 1
         
@@ -255,7 +255,7 @@ class EAT_Encoder(nn.Module):
     def random_masking(self, shape, mask_ratio=0.8, *args):
         
         if mask_ratio == 0:
-            return x, None, None
+            return None, None, None
         
         B, L, D = shape  # batch, length, dim
         B *= self.clone_size
