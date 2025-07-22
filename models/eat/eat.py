@@ -85,71 +85,105 @@ class DropPath(nn.Module):
     def extra_repr(self):
         return f'drop_prob={round(self.drop_prob,3):0.3f}'
 
-class FeedForward(nn.Module):
-
-    def __init__(self, in_dim, hid_dim, dropout=0.):
+class Mlp(nn.Module):
+    """ MLP as used in Vision Transformer, MLP-Mixer and related networks """
+    def __init__(self, in_features, hidden_features=None, out_features=None, act_layer=nn.GELU, norm_layer=None, bias=True, drop=0.):
         super().__init__()
-        self.ffn = nn.Sequential(nn.Linear(in_dim, hid_dim), nn.GELU(), nn.Dropout(dropout), nn.Linear(hid_dim, in_dim), nn.Dropout(dropout))
+        out_features = out_features or in_features
+        hidden_features = hidden_features or in_features
+        self.fc1 = nn.Linear(in_features, hidden_features, bias=bias)
+        self.act = act_layer()
+        self.drop1 = nn.Dropout(drop)
+        self.norm = norm_layer(hidden_features) if norm_layer is not None else nn.Identity()
+        self.fc2 = nn.Linear(hidden_features, out_features, bias=bias)
+        self.drop2 = nn.Dropout(drop)
 
     def forward(self, x):
-        return self.ffn(x)
+        x = self.fc1(x)
+        x = self.act(x)
+        x = self.drop1(x)
+        x = self.norm(x)
+        x = self.fc2(x)
+        x = self.drop2(x)
+        return x
 
 class Attention(nn.Module):
-
-    def __init__(self, in_dim, num_heads=None, qkv_bias=True, attn_drop=0, proj_drop=0):
+    def __init__(self, dim, num_heads=8, qkv_bias=False, qk_norm=False, scale_norm=False, proj_bias=True, attn_drop=0., proj_drop=0., norm_layer=nn.LayerNorm):
+        """
+        Args:
+            dim: Input dimension of the token embeddings
+            num_heads: Number of attention heads
+            qkv_bias: Whether to use bias in the query, key, value projections
+            qk_norm: Whether to apply normalization to query and key vectors
+            proj_bias: Whether to use bias in the output projection
+            attn_drop: Dropout rate applied to the attention weights
+            proj_drop: Dropout rate applied after the output projection
+            norm_layer: Normalization layer constructor for QK normalization if enabled
+        """
         super().__init__()
+        assert dim % num_heads == 0, 'dim should be divisible by num_heads'
+        # if qk_norm or scale_norm:
+            # assert norm_layer is not None, 'norm_layer must be provided if qk_norm or scale_norm is True'
         self.num_heads = num_heads
-        self.head_dim = in_dim // num_heads
+        self.head_dim = dim // num_heads
         self.scale = self.head_dim ** -0.5
-        self.qkv = nn.Linear(in_dim, in_dim * 3, bias=qkv_bias)
-        self.proj = nn.Linear(in_dim, in_dim)
+        self.qkv = nn.Linear(dim, dim * 3, bias=qkv_bias)
+        self.q_norm = norm_layer(self.head_dim) if qk_norm else nn.Identity()
+        self.k_norm = norm_layer(self.head_dim) if qk_norm else nn.Identity()
         self.attn_drop = nn.Dropout(attn_drop)
+        self.norm = norm_layer(dim) if scale_norm else nn.Identity()
+        self.proj = nn.Linear(dim, dim, bias=proj_bias)
         self.proj_drop = nn.Dropout(proj_drop)
-        # self.tau = nn.Parameter(torch.ones(1, num_heads, 1, 1)) if use_tau else None
 
-    def forward(self, x):
-        batch_size, seq_len, feat_dim = x.shape
-        qkv = self.qkv(x).reshape(batch_size, seq_len, 3, self.num_heads, self.head_dim).permute(2, 0, 3, 1, 4)
+    def forward(self, x, attn_mask=None):
+        B, N, C = x.shape
+        qkv = self.qkv(x).reshape(B, N, 3, self.num_heads, self.head_dim).permute(2, 0, 3, 1, 4)
         q, k, v = qkv.unbind(0)
-        attn = (q * self.scale) @ k.transpose(-2, -1)  # B, H, N, D @ B, H, D, N
-        # if self.tau is not None:
-            # attn = attn * self.tau
+        q, k = self.q_norm(q), self.k_norm(k)
+      
+        q = q * self.scale
+        attn = q @ k.transpose(-2, -1)
+        # attn = maybe_add_mask(attn, attn_mask)
         attn = attn.softmax(dim=-1)
         attn = self.attn_drop(attn)
-        x = attn @ v  # B, H, N, N @ B, H, N, D -> B, H, N, D
-        x = x.transpose(1, 2).reshape(batch_size, seq_len, feat_dim)  # B, H, N, D -> B, N, H, D -> B, N, H * D
+        x = attn @ v
+
+        x = x.transpose(1, 2).reshape(B, N, C)
+        x = self.norm(x)
         x = self.proj(x)
-        return self.proj_drop(x)
+        x = self.proj_drop(x)
+        return x
 
-class EncoderBlock(nn.Module):
-
-    def __init__(self, in_dim, num_heads, expand_ratio=4., qkv_bias=True, dropout=0, drop_path=0, norm_layer=nn.LayerNorm, layer_norm_first=False, ffn_targets=True):
+class AltBlock(nn.Module):
+    def __init__(self, dim, num_heads, mlp_ratio=4.0, qkv_bias=False, drop=0.0, attn_drop=0.0, drop_path=0.0, act_layer=nn.GELU, norm_layer=nn.LayerNorm, layer_norm_first=False, ffn_targets=True):
         super().__init__()
+
         self.layer_norm_first = layer_norm_first
         self.ffn_targets = ffn_targets
-        self.attn = Attention(in_dim, num_heads, qkv_bias)
-        self.ff = FeedForward(in_dim, int(in_dim * expand_ratio), dropout)
-        self.ln1 = norm_layer(in_dim)
-        self.ln2 = norm_layer(in_dim)
-        self.drop_path1 = DropPath(drop_path) if drop_path > 0. else nn.Identity()
-        self.drop_path2 = DropPath(drop_path) if drop_path > 0. else nn.Identity()
+        self.norm1 = norm_layer(dim)
+        self.attn = Attention(dim, num_heads=num_heads, qkv_bias=qkv_bias, attn_drop=attn_drop, proj_drop=drop)
+        self.drop_path = DropPath(drop_path) if drop_path > 0.0 else nn.Identity()
+        self.norm2 = norm_layer(dim)
+        mlp_hidden_dim = int(dim * mlp_ratio)
+        self.mlp = Mlp(in_features=dim, hidden_features=mlp_hidden_dim, act_layer=act_layer, drop=drop)
 
-    def forward(self, x):
+    def forward(self, x, rel_pos_bias=None, pos_mask=None):
         if self.layer_norm_first:
-            x = x + self.drop_path1(self.attn(self.ln1(x)))
-            t = self.ff(self.ln2(x))
-            x = x + self.drop_path2(t)
+            x = x + self.drop_path(self.attn(self.norm1(x)))
+            t = self.mlp(self.norm2(x))
+            x = x + self.drop_path(t)
             if not self.ffn_targets:
                 t = x
+            return x, t
         else:
-            x = x + self.drop_path1(self.attn(x))
-            r = self.ln1(x)
-            x = self.ff(r)
+            x = x + self.drop_path(self.attn(x))
+            r = x = self.norm1(x)
+            x = self.mlp(x)
             t = x
-            x = self.ln2(r + self.drop_path2(x))
+            x = self.norm2(r + self.drop_path(x))
             if not self.ffn_targets:
                 t = x
-        return x, t
+            return x, t
 
 class PatchEmbed(nn.Module):
 
@@ -167,8 +201,9 @@ class PatchEmbed(nn.Module):
         x = x.transpose(1, 2) # B, 768, 256 -> B, 256, 768
         return x
 
+     
 class EAT_Encoder(nn.Module):
-    def __init__(self, input_shape=(512, 128), patch_size=(16, 16), embed_dim=768, depth=12, num_heads=12, mlp_ratio=4, qkv_bias=True, dropout=0., drop_path_rate=0., pos_trainable=False, clone_size=16, mode='student', mask_mode='inv'):
+    def __init__(self, input_shape=(512, 128), patch_size=(16, 16), embed_dim=768, depth=12, num_heads=12, mlp_ratio=4, qkv_bias=True, drop=0., attn_drop=0., drop_path_rate=0.., pos_trainable=False, clone_size=16, mode='student', mask_mode='inv'):
         super().__init__()
         
         assert mode in ['student', 'teacher']
@@ -188,11 +223,12 @@ class EAT_Encoder(nn.Module):
         self.clone_size = clone_size
         self.patch_size = patch_size
         self.patch_embed = PatchEmbed(input_shape, patch_size, 1, embed_dim)
-        self.pos_embed = nn.Parameter(torch.zeros(1, self.patch_embed.num_patches + 1, embed_dim), requires_grad=pos_trainable)
-        self.cls_token = nn.Parameter(torch.zeros(1, 1, embed_dim)) # 1, 1, 768
+        pos_embed = get_2d_sincos_pos_embed_flexible(embed_dim, self.patch_embed.patch_ft, cls_token=True)
+        self.pos_embed = nn.Parameter(torch.from_numpy(pos_embed).float().unsqueeze(0), requires_grad=pos_trainable)
+        self.cls_token = nn.Parameter(torch.randn(1, 1, embed_dim) * 0.02) # 1, 1, 768
         norm_layer = partial(nn.LayerNorm, eps=1e-6)
         dpr = [x.item() for x in torch.linspace(0, drop_path_rate, depth)]  # stochastic depth decay rule
-        self.blocks = nn.ModuleList([EncoderBlock(embed_dim, num_heads, mlp_ratio, qkv_bias, dropout, dpr[i], norm_layer) for i in range(depth)])
+        self.blocks = nn.ModuleList([AltBlock(embed_dim, num_heads, mlp_ratio, qkv_bias, drop, attn_drop, dpr[i], norm_layer=norm_layer) for i in range(depth)])
         self.norm = norm_layer(embed_dim)
     
     def inverse_block_mask(self, shape, mask_ratio=0.8, num_freq_patches=8, num_time_patches=32, mask_length=5, mask_prob_adjust=0.07, require_same_masks=True):
@@ -326,6 +362,7 @@ class EAT_Encoder(nn.Module):
     def forward(self, x, mask_ratio=0.8): 
         return self.forward_fn(x, mask_ratio)
 
+
 # Student model for EAT
 class EAT_Student(nn.Module):
     
@@ -337,7 +374,8 @@ class EAT_Student(nn.Module):
                  num_heads=12,
                  mlp_ratio=4,
                  qkv_bias=True,
-                 dropout=0,
+                 drop=0.,
+                 attn_drop=0.,
                  drop_path_rate=0,
                  pos_trainable=False,
                  clone_size=16,
@@ -349,7 +387,7 @@ class EAT_Student(nn.Module):
         super().__init__()
 
         # student encoder & decoder
-        self.encoder = EAT_Encoder(input_shape, patch_size, embed_dim, depth, num_heads, mlp_ratio, qkv_bias, dropout, drop_path_rate, pos_trainable, clone_size, mode='student', mask_mode=mask_mode)
+        self.encoder = EAT_Encoder(input_shape, patch_size, embed_dim, depth, num_heads, mlp_ratio, qkv_bias, drop, attn_drop, drop_path_rate, pos_trainable, clone_size, mode='student', mask_mode=mask_mode)
         num_freq_patches, num_time_patches = self.encoder.patch_embed.patch_ft
         self.decoder = decoder_cls(embed_dim, num_freq_patches=num_freq_patches, num_time_patches=num_time_patches, **decoder_kwargs)
         self.initialize_weights()
@@ -387,28 +425,29 @@ class EAT_Student(nn.Module):
 class EAT_Teacher(nn.Module):
     
   def __init__(self,
-                 input_shape=(512, 128), 
-                 patch_size=(16, 16),
-                 embed_dim=768,
-                 depth=12,
-                 num_heads=12,
-                 mlp_ratio=4,
-                 qkv_bias=True,
-                 dropout=0,
-                 drop_path_rate=0,
-                 pos_trainable=False,
-                 clone_size=16,
-                 average_top_k_layers=12,
-                 instance_norm_target_layer=True,  # based on EAT config
-                 batch_norm_target_layer=False,  # based on EAT config
-                 layer_norm_target_layer=False,  # based on EAT config
-                 layer_norm_targets=True,  # based on EAT config
-                 instance_norm_targets=False,  # based on EAT config
-                ):
+               input_shape=(512, 128),  
+               patch_size=(16, 16),
+               embed_dim=768,
+               depth=12,
+               num_heads=12,
+               mlp_ratio=4,
+               qkv_bias=True,
+               drop=0,
+               attn_drop=0.,
+               drop_path_rate=0,
+               pos_trainable=False,
+               clone_size=16,
+               average_top_k_layers=12,
+               instance_norm_target_layer=True,  # based on EAT config
+               batch_norm_target_layer=False,  # based on EAT config
+               layer_norm_target_layer=False,  # based on EAT config
+               layer_norm_targets=True,  # based on EAT config
+               instance_norm_targets=False,  # based on EAT config
+              ):
         
         super().__init__()
 
-        self.encoder = EAT_Encoder(input_shape, patch_size, embed_dim, depth, num_heads, mlp_ratio, qkv_bias, dropout, drop_path_rate, pos_trainable, clone_size, mode='teacher')
+        self.encoder = EAT_Encoder(input_shape, patch_size, embed_dim, depth, num_heads, mlp_ratio, qkv_bias, drop, attn_drop, drop_path_rate, pos_trainable, clone_size, mode='teacher')
         self.clone_size = clone_size
         self.average_top_k_layers = average_top_k_layers
         self.instance_norm_target_layer = instance_norm_target_layer
