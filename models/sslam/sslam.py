@@ -47,8 +47,7 @@ class CNN2dDecoder(nn.Module):
         x = self.blocks(x)
         x = x.flatten(2).transpose(-2, -1)  # B, L, D
         return self.proj(x)
-
-# Vit Encoder for EAT
+        
 
 ## https://github.com/huggingface/pytorch-image-models/blob/main/timm/layers/drop.py#L170
 def drop_path(x, drop_prob: float = 0., training: bool = False, scale_by_keep: bool = True):
@@ -201,7 +200,8 @@ class PatchEmbed(nn.Module):
         x = x.transpose(1, 2) # B, 768, 256 -> B, 256, 768
         return x
 
-     
+
+# We can replace the EAT_encoder in eat.py with this ViT_MaskedEncoder. It's the same in all vit models with masking, and this is a more informative or general name.
 class ViT_MaskedEncoder(nn.Module):
     def __init__(self, input_shape=(512, 128), patch_size=(16, 16), embed_dim=768, depth=12, num_heads=12, mlp_ratio=4, qkv_bias=True, drop=0., attn_drop=0., drop_path_rate=0., pos_trainable=False, clone_size=16, mode='student', mask_mode='inv'):
         super().__init__()
