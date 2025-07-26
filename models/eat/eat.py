@@ -9,7 +9,9 @@ from torch import nn
 import torch.nn.functional as F
 
 
-# Decoder
+# Decoders:
+
+## CNN-2d
 class Conv2dLayerNorm(nn.Module):
     def __init__(self, in_c, out_c, kernel_size, stride=1, padding='same', groups=1, activation=nn.GELU, add_residual=True):
         super().__init__()
@@ -48,8 +50,51 @@ class CNN2dDecoder(nn.Module):
         x = x.flatten(2).transpose(-2, -1)  # B, L, D
         return self.proj(x)
 
-# Vit Encoder for EAT
+## MLP-LSTM
+class MLP_LSTM_Block(nn.Module):
+    
+    def __init__(self, dim=768, drop=0., activation=nn.GELU, bidirectional=True, add_residual=True):
+        super().__init__()
+        self.add_residual = add_residual
+        self.act = activation()
+        self.fc1 = nn.Linear(dim, dim, bias=False)
+        self.ln1 = nn.LayerNorm(dim)
+        self.drop = nn.Dropout(drop)
+        self.lstm = nn.LSTM(dim, dim, batch_first=True, bidirectional=bidirectional)
+        fc2_inp_size = int(dim * 2) if bidirectional else dim
+        self.fc2 =  nn.Linear(fc2_inp_size, dim, bias=False)
+        self.ln2 = nn.LayerNorm(dim)
+                
+    def forward(self, x):
+        self.lstm.flatten_parameters()
+        z = self.fc1(x)
+        z = self.act(z)
+        z = self.ln1(z)
+        z = self.drop(z)
+        with torch.autocast(device_type='cuda', enabled=False):  # device_type=x.device
+            z = z.float()
+            z, _ = self.lstm(z)
+        z = self.fc2(z)
+        z = self.act(z)
+        out = self.ln2(z)
+        if self.add_residual:
+            out = out + x
+        return out
 
+class MLP_LSTM_Decoder(nn.Module):
+    def __init__(self, dim=768, drop=0., activation=nn.GELU, bidirectional=True, add_residual=True, num_layers=2, **kwargs):
+        super().__init__()
+        self.blocks = nn.Sequential(*[MLP_LSTM_Block(dim, drop, activation, bidirectional, add_residual) for _ in range(num_layers)])
+        self.mask_token = nn.Parameter(torch.randn(1, 1, dim) * 0.02)
+        
+    def forward(self, x, ids_restore):
+        mask_tokens = self.mask_token.repeat(x.shape[0], ids_restore.shape[1] - x.shape[1], 1)
+        x = torch.cat([x, mask_tokens], dim=1)
+        x = torch.gather(x, dim=1, index=ids_restore)
+        return self.blocks(x)
+
+
+# Vit Encoder for EAT
 ## https://github.com/huggingface/pytorch-image-models/blob/main/timm/layers/drop.py#L170
 def drop_path(x, drop_prob: float = 0., training: bool = False, scale_by_keep: bool = True):
     """Drop paths (Stochastic Depth) per sample (when applied in main path of residual blocks).
@@ -85,6 +130,7 @@ class DropPath(nn.Module):
     def extra_repr(self):
         return f'drop_prob={round(self.drop_prob,3):0.3f}'
 
+
 class Mlp(nn.Module):
     """ MLP as used in Vision Transformer, MLP-Mixer and related networks """
     def __init__(self, in_features, hidden_features=None, out_features=None, act_layer=nn.GELU, norm_layer=None, bias=True, drop=0.):
@@ -106,6 +152,7 @@ class Mlp(nn.Module):
         x = self.fc2(x)
         x = self.drop2(x)
         return x
+        
 
 class Attention(nn.Module):
     def __init__(self, dim, num_heads=8, qkv_bias=False, qk_norm=False, scale_norm=False, proj_bias=True, attn_drop=0., proj_drop=0., norm_layer=nn.LayerNorm):
@@ -153,6 +200,7 @@ class Attention(nn.Module):
         x = self.proj(x)
         x = self.proj_drop(x)
         return x
+        
 
 class AltBlock(nn.Module):
     def __init__(self, dim, num_heads, mlp_ratio=4.0, qkv_bias=False, drop=0.0, attn_drop=0.0, drop_path=0.0, act_layer=nn.GELU, norm_layer=nn.LayerNorm, layer_norm_first=False, ffn_targets=True):
@@ -184,6 +232,7 @@ class AltBlock(nn.Module):
             if not self.ffn_targets:
                 t = x
             return x, t
+            
 
 class PatchEmbed(nn.Module):
 
@@ -201,9 +250,10 @@ class PatchEmbed(nn.Module):
         x = x.transpose(1, 2) # B, 768, 256 -> B, 256, 768
         return x
 
-     
-class EAT_Encoder(nn.Module):
-    def __init__(self, input_shape=(512, 128), patch_size=(16, 16), embed_dim=768, depth=12, num_heads=12, mlp_ratio=4, qkv_bias=True, drop=0., attn_drop=0., drop_path_rate=0.., pos_trainable=False, clone_size=16, mode='student', mask_mode='inv'):
+
+# TODO: add sequential masking for using regular transformer (patch-size=(f=128, t=1))
+class ViT_MaskedEncoder(nn.Module):
+    def __init__(self, input_shape=(512, 128), patch_size=(16, 16), embed_dim=768, depth=12, num_heads=12, mlp_ratio=4, qkv_bias=True, drop=0., attn_drop=0., drop_path_rate=0., pos_trainable=False, clone_size=16, mode='student', mask_mode='inv'):
         super().__init__()
         
         assert mode in ['student', 'teacher']
@@ -230,7 +280,7 @@ class EAT_Encoder(nn.Module):
         dpr = [x.item() for x in torch.linspace(0, drop_path_rate, depth)]  # stochastic depth decay rule
         self.blocks = nn.ModuleList([AltBlock(embed_dim, num_heads, mlp_ratio, qkv_bias, drop, attn_drop, dpr[i], norm_layer=norm_layer) for i in range(depth)])
         self.norm = norm_layer(embed_dim)
-    
+        
     def inverse_block_mask(self, shape, mask_ratio=0.8, num_freq_patches=8, num_time_patches=32, mask_length=5, mask_prob_adjust=0.07, require_same_masks=True):
         
         if mask_ratio == 0:
@@ -316,8 +366,8 @@ class EAT_Encoder(nn.Module):
         ids_keep = ids_keep.unsqueeze(-1).expand(-1, -1, D)
         
         return mask, ids_keep, ids_restore
-
-    def student_forward(self, x, mask_ratio=0.8):
+                
+    def student_forward(self, x, mask_ratio=None):
         x = self.patch_embed(x)  # B, 1, T, F -> B, L=256, D=768
         x = x + self.pos_embed[:, 1:, :]
         
@@ -348,7 +398,7 @@ class EAT_Encoder(nn.Module):
         
         return cls_pred, patch_pred, mask, ids_restore
 
-    def teacher_forward(self, x, mask_ratio=0):
+    def teacher_forward(self, x, mask_ratio=None):
         x = self.patch_embed(x)  # B, C=1, T=512, F=128 -> B, L=256, D=768
         cls_tokens = self.cls_token.expand(x.shape[0], -1, -1)
         x = torch.cat((cls_tokens, x), dim=1)
@@ -359,7 +409,7 @@ class EAT_Encoder(nn.Module):
             features.append(t[:, 1:, :].clone())
         return features
        
-    def forward(self, x, mask_ratio=0.8): 
+    def forward(self, x, mask_ratio=None):
         return self.forward_fn(x, mask_ratio)
 
 
@@ -387,9 +437,11 @@ class EAT_Student(nn.Module):
         super().__init__()
 
         # student encoder & decoder
-        self.encoder = EAT_Encoder(input_shape, patch_size, embed_dim, depth, num_heads, mlp_ratio, qkv_bias, drop, attn_drop, drop_path_rate, pos_trainable, clone_size, mode='student', mask_mode=mask_mode)
-        num_freq_patches, num_time_patches = self.encoder.patch_embed.patch_ft
-        self.decoder = decoder_cls(embed_dim, num_freq_patches=num_freq_patches, num_time_patches=num_time_patches, **decoder_kwargs)
+        self.encoder = ViT_MaskedEncoder(input_shape, patch_size, embed_dim, depth, num_heads, mlp_ratio, qkv_bias, drop, attn_drop, drop_path_rate, pos_trainable, clone_size, mode='student', mask_mode=mask_mode)
+        decoder_kwargs['num_freq_patches'] = self.encoder.patch_embed.patch_ft[0]
+        decoder_kwargs['num_time_patches'] = self.encoder.patch_embed.patch_ft[1]
+        decoder_kwargs['dim'] = embed_dim
+        self.decoder = decoder_cls(**decoder_kwargs)
         self.initialize_weights()
         self.clone_size = clone_size
         
@@ -421,10 +473,11 @@ class EAT_Student(nn.Module):
         patch_pred = self.decoder(patch_pred, ids_restore)
         return cls_pred, patch_pred, mask
 
+
 # Teacher model for EAT
 class EAT_Teacher(nn.Module):
     
-  def __init__(self,
+    def __init__(self,
                input_shape=(512, 128),  
                patch_size=(16, 16),
                embed_dim=768,
@@ -447,7 +500,7 @@ class EAT_Teacher(nn.Module):
         
         super().__init__()
 
-        self.encoder = EAT_Encoder(input_shape, patch_size, embed_dim, depth, num_heads, mlp_ratio, qkv_bias, drop, attn_drop, drop_path_rate, pos_trainable, clone_size, mode='teacher')
+        self.encoder = ViT_MaskedEncoder(input_shape, patch_size, embed_dim, depth, num_heads, mlp_ratio, qkv_bias, drop, attn_drop, drop_path_rate, pos_trainable, clone_size, mode='teacher')
         self.clone_size = clone_size
         self.average_top_k_layers = average_top_k_layers
         self.instance_norm_target_layer = instance_norm_target_layer
@@ -489,6 +542,7 @@ class EAT_Teacher(nn.Module):
         patch_target = patch_target.repeat_interleave(self.clone_size, dim=0)
         return patch_target
 
+
 # Utils
 class RiseRunDecay(torch.optim.lr_scheduler._LRScheduler):
 
@@ -512,6 +566,7 @@ class RiseRunDecay(torch.optim.lr_scheduler._LRScheduler):
             factor = 0.5 * (1 + math.cos(math.pi * current_iteration / self.decay_interval))
 
         return [lr * factor if (lr * factor) > self.lowest_lr else self.lowest_lr for lr in self.base_lrs]
+        
 
 class EMA_Weight_Decay_Scheduler:
     def __init__(self, decay_start=0.9998, decay_end=0.99999, max_iter=None):
@@ -521,15 +576,27 @@ class EMA_Weight_Decay_Scheduler:
         
     def step(self):
         w = self.decays[self.counter]
-        self.counter += 1
-        self.counter = min(self.counter, self.max_iter)
+        self.counter = min(self.counter + 1, self.max_iter)
         return w
+
+
+class Sigmoid_Rampup_Scheduler:
+    def __init__(self, scale=-5.0, max_iter=None):
+        self.scale = scale
+        self.max_iter = max_iter
+        self.counter = 0
+        
+    def step(self):
+        phase_square = (1.0 - self.current / self.max_iter) ** 2
+        self.counter = min(self.counter + 1, self.max_iter)
+        return math.exp(self.scale * phase_square)
         
         
 def masked_reconstruction_loss(pred, target, mask):
     loss = (pred - target) ** 2
     loss = loss.mean(dim=-1)
     return (loss * mask).sum() / mask.sum()
+    
 
 @torch.no_grad()
 def ema_update(ema_model, model, buffers=True, decay=.999):
@@ -541,33 +608,65 @@ def ema_update(ema_model, model, buffers=True, decay=.999):
                 b_avg.data = b.data
             else:
                 b_avg.data = decay * b_avg.data + (1. - decay) * b.data
+                
 
-def train_step(student, teacher, optimizer, train_loader, scheduler=None, device='cuda', clip_norm=4., mask_ratio=0.8, ema_scheduler=None):
+def load_eat_audioset_pretrained_state(model, audioset_eat_state_path='EAT-base_epoch30_pt.pt'):
+    audioset_state = torch.load(eat_state_path)
+    model_state = model.state_dict()
+    model_state['cls_token'] = audioset_state['model']['modality_encoders.IMAGE.extra_tokens'].clone()
+    model_state['patch_embed.proj.weight'] = audioset_state['model']['modality_encoders.IMAGE.local_encoder.proj.weight'].clone()
+    model_state['patch_embed.proj.bias'] = audioset_state['model']['modality_encoders.IMAGE.local_encoder.proj.bias'].clone()
+    # model_state['pos_embed'] = audioset_state['model']['modality_encoders.IMAGE.fixed_positional_encoder.positions'][:, :257].clone() not necessary
+    model_state['norm.weight'] = audioset_state['model']['modality_encoders.IMAGE.context_encoder.norm.weight'].clone()
+    model_state['norm.bias'] = audioset_state['model']['modality_encoders.IMAGE.context_encoder.norm.bias'].clone()
+    for k in audioset_state['model'].keys():
+        if k[:6] == 'blocks':
+            model_state[k] = audioset_state['model'][k].clone()
+    _ = model.load_state_dict(model_state, strict=False)
+    print(_)
+    return model
+
+
+def train_step(student, teacher, optimizer, train_loader, scheduler=None, device='cuda', clip_norm=4., mask_ratio=0.8, ema_scheduler=None, teacher_assistant=None, sigmoid_scheduler=None):
     losses = []
     
     student.train()
     teacher.eval()
     
     for x in tqdm(train_loader, leave=False):
-        x = x.to(device)  # B=12, 1, T=512, F=128
+        x = x.to(device)  # B=12?, C=1, T=512, F=128
         
         with torch.autocast(device_type=device, dtype=torch.bfloat16):
             cls_pred, patch_pred, mask = student(x, mask_ratio)  # cls_pred: (B*clone_size, D=768), patch_pred: (B*clone_size, L=256, D), mask: (B*clone_size, L=256)
             with torch.no_grad():
                 patch_target = teacher(x)  # (B*clone_size, L=256, D)
+                if teacher_assistant is not None:
+                    patch_target_assistant = teacher_assistant(x)  # (B*clone_size, L=256, D)
         
-        cls_pred, patch_pred, mask, patch_target = cls_pred.float(), patch_pred.float(), mask.float(), patch_target.float()  
-        cls_target = patch_target.mean(dim=1)  # B*clone_size, D=768 
+        cls_pred, patch_pred, mask, patch_target = cls_pred.float(), patch_pred.float(), mask.float(), patch_target.float()
+        cls_target = patch_target.mean(dim=1)  # B*clone_size, D=768
         
+        if teacher_assistant is not None:
+            patch_target_assistant = patch_target_assistant.float()
+            cls_target_assistant = patch_target_assistant.mean(dim=1)
+            alpha = sigmoid_scheduler.step()  # alpha gradually goes from ~0 -> 1 with every step
+            patch_target = alpha * patch_target + (1. - alpha) * patch_target_assistant
+            cls_target = alpha * cls_target + (1. - alpha) * cls_target_assistant
+            
         # local (patch) loss + global (utterance) loss
         loss = masked_reconstruction_loss(patch_pred, patch_target, mask)
         loss += torch.mean((cls_pred - cls_target) ** 2.)
         
         loss.backward()
-        torch.nn.utils.clip_grad_norm_(student.parameters(), clip_norm)
+        
+        if clip_norm is not None:
+            torch.nn.utils.clip_grad_norm_(student.parameters(), clip_norm)
+        
         optimizer.step()
+        
         if scheduler is not None:
             scheduler.step()
+        
         optimizer.zero_grad()
         
         if ema_scheduler is not None:
@@ -580,6 +679,7 @@ def train_step(student, teacher, optimizer, train_loader, scheduler=None, device
     
     return np.mean(losses)
 
+
 # config
 epochs = 30
 device = 'cuda'
@@ -587,15 +687,16 @@ seed = 42
 sample_dur = 5
 patch_size = (16, 16)
 clone_size = 16
-mask_mode = 'inv'
+mask_mode = 'inv'  # rand, inv, seq 
 mask_ratio = 0.8
 clip_norm= 4.
-decoder_type = 'cnn2d'  # cnn2d, cnn1d, mlplstm, vit, swin
-# if decoder_type == 'cnn2d': for ablation, later...
-#     decoder_cls = LSTM or CNN2D
-#     decoder_kwargs = {'kernel_size': 3, 'stride': 1, 'padding': 'same', 'groups': 16, 'activation': nn.GELU, 'add_residual': True, 'num_layers': 6}
+encoder_type = 'vitbase'  # vitbase, vitlarge, vithuge
+decoder_type = 'mlplstm'  # cnn2d, mlplstm
+use_double_teacher = False
 
-experiment_name = f"EAT_{decoder_type}_{patch_size[0]}x{patch_size[1]}_{mask_mode}mask{int(mask_ratio*100)}_{clone_size}clone"
+experiment_name = f"EAT_{encoder_type}_{decoder_type}_{patch_size[0]}x{patch_size[1]}_{mask_mode}mask{int(mask_ratio*100)}_{clone_size}clone"
+if use_double_teacher:
+     experiment_name += "_2teachers"
 print(experiment_name)
 
 # saving and monitoring
@@ -609,27 +710,61 @@ print(state_path)
 history = {'train_loss': []}
 
 # build models
-student = EAT_Student().to(device).train()
-teacher = EAT_Teacher().to(device).eval()
+
+if decoder_type == 'cnn2d':
+    decoder_cls = CNN2dDecoder
+    decoder_kwargs = {'kernel_size': 3, 'stride': 1, 'padding': 'same', 'groups': 16, 'activation': nn.GELU, 'add_residual': True, 'num_layers': 6}
+elif decoder_type == 'mlplstm':
+    decoder_cls = MLP_LSTM_Decoder
+    decoder_kwargs = {'drop': 0, 'activation': nn.GELU, 'bidirectional': True, 'add_residual': True, 'num_layers': 2}
+else:
+    raise ValueError(f'{decoder_type} is not defined!')
+
+if encoder_type == 'vitbase':
+    embed_dim = 768
+    depth = 12
+    num_heads = 12
+    average_top_k_layers = depth
+    if use_double_teacher:
+        audioset_eat_state_path = 'EAT-base_epoch30_pt.pt'
+elif encoder_type == 'vitlarge':
+    raise ValueError('later define the values for large and huge models here.')
+elif encoder_type == 'vithuge':
+    raise ValueError('later define the values for large and huge models here.')
+else:
+    raise ValueError('undefined model size.')
+
+
+student = EAT_Student(patch_size=patch_size, embed_dim=embed_dim, depth=depth, num_heads=num_heads, clone_size=clone_size, mask_mode=mask_mode, emdecoder_cls=decoder_cls, decoder_kwargs=decoder_kwargs).to(device).train()
+teacher = EAT_Teacher(patch_size=patch_size, embed_dim=embed_dim, depth=depth, num_heads=num_heads, clone_size=clone_size, average_top_k_layers=average_top_k_layers).to(device).eval()
 teacher.encoder.load_state_dict(student.encoder.state_dict())
 teacher.requires_grad_(False)
-student.compile(mode='default')
-teacher.compile(mode='default')
+if use_double_teacher:
+    teacher_assistant = EAT_Teacher(patch_size=(16, 16), embed_dim=embed_dim, depth=depth, num_heads=num_heads, clone_size=clone_size, average_top_k_layers=average_top_k_layers)
+    teacher_assistant = load_eat_audioset_pretrained_state(teacher_assistant, audioset_eat_state_path=audioset_eat_state_path)
+    teacher_assistant.to(device).eval()
+    teacher_assistant.requires_grad_(False)
+    sigmoid_scheduler = Sigmoid_Rampup_Scheduler(max_iter=epochs*len(train_loader)) 
+else:
+    teacher_assistant = None
+    sigmoid_scheduler = None
+    
 optimizer = torch.optim.AdamW(student.parameters(), lr=0.0005, weight_decay=0.05, betas=[0.9, 0.95])
 scheduler = RiseRunDecay(optimizer, steps_in_epoch=len(train_loader), warmup=epochs//8, total_epochs=epochs, lowest_lr=1e-6)
+ema_scheduler = EMA_Weight_Decay_Scheduler(decay_start=0.9998, decay_end=0.99999, max_iter=len(train_loader)*(epochs//4))
+
 print(f'#parameters: {sum(p.numel() for p in student.parameters()):_}')
 print(f'#parameters: {sum(p.numel() for p in teacher.parameters()):_}')
-ema_scheduler = EMA_Weight_Decay_Scheduler(decay_start=0.9998, decay_end=0.99999, max_iter=len(train_loader)*(epochs//4))
+
 
 # run
 if __name__ == "__main__":
     train_loader = None
     pbar = tqdm(range(epochs), colour='orange')
     for epoch in pbar:
-        train_loss = train_step(student, teacher, optimizer, train_loader, scheduler, device, clip_norm, mask_ratio, ema_scheduler)
+        train_loss = train_step(student, teacher, optimizer, train_loader, scheduler, device, clip_norm, mask_ratio, ema_scheduler, teacher_assistant, sigmoid_scheduler)
         history['train_loss'].append(train_loss)
-        if epoch in [0, 4, 9, 14, 19, 24, 29]:  # to make plots later for performance at different epochs
+        if epoch == 0 or (epoch + 1) % 5 == 0:
             torch.save({'encoder': student.encoder.state_dict(), 'ema_encoder': teacher.encoder.state_dict(), 'decoder': student.decoder.state_dict(), 'opt': optimizer.state_dict(), 'epochs': epochs}, state_path.as_posix().split('.pt')[0] + f"_epoch{epoch+1}.pt")
         pbar.set_description(f"loss={train_loss:.4f}")
-
     _ = pd.DataFrame(history).to_csv(history_path)
